@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Water Infiltration Analysis Custom</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    background: #f8f9fa;
+    color: #1a1a2e;
+    padding: 20px;
+  }
+
+  h1 { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+  .desc { color: #555; font-size: 13px; margin-bottom: 20px; }
+
+  .section { margin-bottom: 18px; }
+  .section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #3a7bd5;
+    margin-bottom: 10px;
+  }
+  .optional-badge {
+    font-size: 10px;
+    font-weight: 500;
+    color: #888;
+    background: #f0f0f0;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: 6px;
+    vertical-align: middle;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  label { display: block; font-weight: 500; margin-bottom: 4px; font-size: 13px; }
+  label .req { color: #e53e3e; margin-left: 2px; }
+  .hint { font-size: 11px; color: #888; margin-bottom: 6px; }
+
+  select, input[type="text"], input[type="number"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    color: #1a1a2e;
+    margin-bottom: 12px;
+    transition: border-color .15s;
+  }
+  select:focus, input:focus {
+    outline: none;
+    border-color: #3a7bd5;
+    box-shadow: 0 0 0 3px rgba(58,123,213,.12);
+  }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+
+  /* Radio cards (enum <= 4 options) */
+  .radio-card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .radio-card { position: relative; cursor: pointer; }
+  .radio-card input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+  .radio-card label {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    border: 2px solid #d0d7de;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    font-weight: 400;
+    margin-bottom: 0;
+  }
+  .radio-card input[type="radio"]:checked + label {
+    border-color: #3a7bd5;
+    background: #f0f4ff;
+  }
+
+  /* Object numeric fields with constrained sum */
+  .obj-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 14px;
+  }
+  .obj-item label { font-weight: 400; }
+  .obj-sum {
+    font-size: 12px;
+    margin-top: 6px;
+    padding: 6px 10px;
+    border-radius: 5px;
+    background: #f0f4ff;
+  }
+  .obj-sum.ok { background: #e6ffed; color: #276749; }
+  .obj-sum.err { background: #fff5f5; color: #c53030; }
+
+  /* Map */
+  .map-wrap { position: relative; margin-bottom: 6px; }
+  .map-container { height: 340px; width: 100%; max-width: 100%; overflow: hidden; border: 1px solid #d0d7de; border-radius: 8px; position: relative; }
+  .map-container.phase-active { border-color: #3a7bd5; }
+
+  .map-hint {
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    background: #f0f4ff;
+    color: #3a7bd5;
+  }
+
+  .btn-done-overlay {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    z-index: 1000;
+    padding: 9px 16px;
+    border: none;
+    border-radius: 20px;
+    background: #3a7bd5;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    transition: opacity .15s, transform .15s;
+  }
+  .btn-done-overlay:hover { opacity: .92; transform: translateY(-1px); }
+
+  /* Phase switcher (multiple geo fields in one process) */
+  .phase-bar {
+    display: flex;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .phase-btn {
+    flex: 1;
+    padding: 9px 12px;
+    border: none;
+    background: #f5f7fa;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    color: #555;
+    transition: background .15s, color .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .phase-btn:not(:last-child) { border-right: 1px solid #d0d7de; }
+  .phase-btn.active { background: #3a7bd5; color: #fff; }
+  .phase-btn.done { background: #e6ffed; color: #276749; }
+  .phase-btn:disabled { opacity: .5; cursor: default; }
+
+  /* Multi-feature list (measures / canopy / etc.) */
+  .feature-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .feature-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    background: #fff;
+  }
+  .feature-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .feature-label { flex: 1; font-size: 13px; color: #444; }
+  .feature-prop-input { width: 90px; margin-bottom: 0; text-align: center; }
+  .btn-remove-feature {
+    background: none;
+    border: none;
+    color: #c53030;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 2px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .btn-add {
+    width: 100%;
+    padding: 8px;
+    border: 2px dashed #b0bec5;
+    border-radius: 8px;
+    background: none;
+    color: #555;
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+    margin-top: 6px;
+  }
+  .btn-add:hover:not(:disabled) { border-color: #3a7bd5; color: #3a7bd5; }
+  .btn-add:disabled { opacity: .5; cursor: default; }
+
+  .actions { display: flex; gap: 10px; margin-top: 20px; }
+  button.btn-submit, button.btn-cancel {
+    padding: 9px 20px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: opacity .15s;
+  }
+  button:hover { opacity: .88; }
+  .btn-submit { background: #3a7bd5; color: #fff; flex: 1; }
+  .btn-cancel { background: #e2e8f0; color: #444; }
+
+  .error-msg { color: #c53030; font-size: 12px; margin-bottom: 8px; display: none; }
+</style>
+</head>
+<body>
+
+<h1>Water Infiltration Analysis Custom</h1>
+<p class="desc">Leakage analysis using custom meteorological parameters. Ideal for 'what-if' scenarios.</p>
+
+<form id="analysisForm" novalidate>
+  <div class="section">
+    <div class="section-title">Map</div>
+    <div class="map-hint" id="mapHint">Draw the Analysis Area polygon(s).</div>
+    <div class="map-wrap">
+      <div class="map-container phase-active" id="map"></div>
+
+    </div>
+    <span class="error-msg" id="err_polygon">Please draw at least one Analysis Area polygon.</span>
+  </div>
+  <div class="section">
+    <div class="section-title">City</div>
+    
+    <div class="radio-card-grid">
+      <div class="radio-card">
+        <input type="radio" name="city" id="city_0" value="Leuven" required>
+        <label for="city_0">Leuven</label>
+      </div>
+      <div class="radio-card">
+        <input type="radio" name="city" id="city_1" value="Cluj-Napoca">
+        <label for="city_1">Cluj-Napoca</label>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">Custom Weather Parameters</div>
+    <p class="hint">Specific meteorological conditions for the simulation.</p>
+    <div class="obj-grid">
+      <div class="obj-item">
+        <label>Temperature</label>
+        <input type="number" name="weather.temperature" step="0.1" required>
+      </div>
+      <div class="obj-item">
+        <label>Precipitation</label>
+        <input type="number" name="weather.precipitation" step="0.1" required>
+      </div>
+      <div class="obj-item">
+        <label>Humidity</label>
+        <input type="number" name="weather.humidity" min="0" max="100" step="0.1" required>
+      </div>
+      <div class="obj-item">
+        <label>Antecedent Precip 7d</label>
+        <input type="number" name="weather.antecedent_precip_7d" step="0.1" required>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">NBS Weights</div>
+    <p class="hint">Dictionary of Nature-Based Solutions IDs with coverage percentages. The sum of values must be 100.</p>
+    <div class="obj-grid">
+      <div class="obj-item">
+        <label>Existing Conditions</label>
+        <input type="number" name="nbs_weights.existing_conditions" min="0" max="100" step="0.1" value="0">
+      </div>
+      <div class="obj-item">
+        <label>Rain Garden</label>
+        <input type="number" name="nbs_weights.rain_garden" min="0" max="100" step="0.1" value="0">
+      </div>
+      <div class="obj-item">
+        <label>Bioswale</label>
+        <input type="number" name="nbs_weights.bioswale" min="0" max="100" step="0.1" value="0">
+      </div>
+      <div class="obj-item">
+        <label>Permeable Pavement</label>
+        <input type="number" name="nbs_weights.permeable_pavement" min="0" max="100" step="0.1" value="0">
+      </div>
+      <div class="obj-item">
+        <label>Green Roof Extensive</label>
+        <input type="number" name="nbs_weights.green_roof_extensive" min="0" max="100" step="0.1" value="0">
+      </div>
+      <div class="obj-item">
+        <label>Constructed Wetland</label>
+        <input type="number" name="nbs_weights.constructed_wetland" min="0" max="100" step="0.1" value="0">
+      </div>
+      <div class="obj-item">
+        <label>Urban Forest</label>
+        <input type="number" name="nbs_weights.urban_forest" min="0" max="100" step="0.1" value="0">
+      </div>
+      <div class="obj-item">
+        <label>Infiltration Trench</label>
+        <input type="number" name="nbs_weights.infiltration_trench" min="0" max="100" step="0.1" value="0">
+      </div>
+    </div>
+    <div class="obj-sum" id="nbs_weightsSum">Total: <strong id="nbs_weightsTotal">0</strong> / 100</div>
+    <span class="error-msg" id="nbs_weightsErr">Values must sum to exactly 100.</span>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn-cancel" onclick="cancel()">Cancel</button>
+    <button type="submit" class="btn-submit">Run Analysis</button>
+  </div>
+
+</form>
+
+<script>
+
+
+  const nbs_weightsInputs = document.querySelectorAll('[name^="nbs_weights."]');
+  const nbs_weightsSumEl = document.getElementById('nbs_weightsSum');
+  const nbs_weightsTotalEl = document.getElementById('nbs_weightsTotal');
+  function updatenbs_weightsSum() {
+    let total = 0;
+    nbs_weightsInputs.forEach(i => total += parseFloat(i.value) || 0);
+    total = Math.round(total * 10) / 10;
+    nbs_weightsTotalEl.textContent = total;
+    nbs_weightsSumEl.className = 'obj-sum ' + (total === 100 ? 'ok' : total > 100 ? 'err' : '');
+  }
+  nbs_weightsInputs.forEach(i => i.addEventListener('input', updatenbs_weightsSum));
+  updatenbs_weightsSum();
+
+  // Default center; overridden below by ?lat=&lng=&zoom= query params (if the HTML is
+  // loaded via <iframe src="...">) or by a postMessage({ type: 'set-center', lat, lng, zoom })
+  // sent from the parent window (if loaded via <iframe srcdoc="...">).
+  const DEFAULT_CENTER = [50.88, 4.70];
+  const DEFAULT_ZOOM = 13;
+
+  function readCenterFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const lat = parseFloat(params.get('lat'));
+    const lng = parseFloat(params.get('lng'));
+    const zoom = parseFloat(params.get('zoom'));
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return { lat, lng, zoom: isNaN(zoom) ? DEFAULT_ZOOM : zoom };
+  }
+
+  const initialCenter = readCenterFromQuery();
+  const map = L.map('map').setView(
+    initialCenter ? [initialCenter.lat, initialCenter.lng] : DEFAULT_CENTER,
+    initialCenter ? initialCenter.zoom : DEFAULT_ZOOM
+  );
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  // Let the parent window (re)center the map at any time, e.g. after the user picks a city:
+  // iframe.contentWindow.postMessage({ type: 'set-center', lat, lng, zoom }, '*');
+  window.addEventListener('message', function(ev) {
+    const msg = ev.data;
+    if (!msg || msg.type !== 'set-center') return;
+    const lat = parseFloat(msg.lat);
+    const lng = parseFloat(msg.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    map.setView([lat, lng], isNaN(parseFloat(msg.zoom)) ? map.getZoom() : parseFloat(msg.zoom));
+  });
+
+  // Tell the parent the map is ready to receive a set-center message.
+  window.parent.postMessage({ type: 'analysis-ready' }, '*');
+
+  // Circles are drawn/edited as center+radius in Leaflet; convert to a GeoJSON Polygon
+  // approximation so downstream turf.union / turf.booleanContains and the OGC payload
+  // (which expects Polygon geometries) work uniformly for polygon, rectangle and circle.
+  function layerToPolygonGeometry(layer) {
+    if (layer instanceof L.Circle) {
+      const center = layer.getLatLng();
+      return turf.circle([center.lng, center.lat], layer.getRadius() / 1000, { units: 'kilometers', steps: 64 }).geometry;
+    }
+    return layer.toGeoJSON().geometry;
+  }
+
+  const MEASURE_COLORS = ["#805ad5","#e53e3e","#d69e2e","#38a169","#3182ce","#dd6b20","#d53f8c","#718096"];
+  const fields = ['polygon'];
+  let currentPhase = 'polygon';
+
+  const layer_polygon = new L.FeatureGroup().addTo(map);
+  const mergedLayer_polygon = new L.FeatureGroup().addTo(map);
+  let items_polygon = [];
+  let counter_polygon = 0;
+  let merged_polygon = null;
+  const labelLayer = new L.FeatureGroup().addTo(map);
+  const draw_polygon = new L.Control.Draw({
+    edit: { featureGroup: layer_polygon },
+    draw: { polygon: true, rectangle: true, circle: true, polyline: false, marker: false, circlemarker: false }
+  });
+
+
+  function recomputeMerged_polygon() {
+    mergedLayer_polygon.clearLayers();
+    if (items_polygon.length === 0) { merged_polygon = null; return; }
+    let acc = turf.polygon(items_polygon[0].geometry.coordinates);
+    for (let i = 1; i < items_polygon.length; i++) {
+      try {
+        acc = turf.union(acc, turf.polygon(items_polygon[i].geometry.coordinates));
+      } catch (err) { /* non-overlapping or invalid geometry: keep accumulated result */ }
+    }
+    merged_polygon = acc.geometry;
+    L.geoJSON(merged_polygon, {
+      style: { color: '#1a1a2e', weight: 3, dashArray: '6 4', fillColor: '#3a7bd5', fillOpacity: 0.12, interactive: false }
+    }).addTo(mergedLayer_polygon);
+  }
+
+  draw_polygon.addTo(map);
+
+  map.on(L.Draw.Event.CREATED, function(e) {
+    if (currentPhase === 'polygon') {
+      counter_polygon++;
+      const idx = counter_polygon;
+      if (e.layer.setStyle) e.layer.setStyle({ stroke: false, fill: false });
+      layer_polygon.addLayer(e.layer);
+      items_polygon.push({ idx, layer: e.layer, geometry: layerToPolygonGeometry(e.layer) });
+      recomputeMerged_polygon();
+      
+    }
+  });
+
+  map.on(L.Draw.Event.DELETED, function(e) {
+    if (currentPhase === 'polygon') {
+      const deletedIdx = new Set();
+      e.layers.eachLayer(l => {
+        const m = items_polygon.find(m => m.layer === l);
+        if (m) deletedIdx.add(m.idx);
+      });
+      items_polygon = items_polygon.filter(m => !deletedIdx.has(m.idx));
+      recomputeMerged_polygon();
+      if (items_polygon.length === 0) {
+        const doneBtn_polygon = document.getElementById('btnDone_polygon');
+        if (doneBtn_polygon) { doneBtn_polygon.style.display = 'none'; doneBtn_polygon.dataset.hasItems = ''; }
+        
+      }
+    }
+  });
+
+
+
+document.getElementById('analysisForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const form = this;
+  let valid = true;
+
+    let nbs_weightsVal = 0;
+    nbs_weightsInputs.forEach(i => nbs_weightsVal += parseFloat(i.value) || 0);
+    const nbs_weightsErrEl = document.getElementById('nbs_weightsErr');
+    if (Math.round(nbs_weightsVal * 10) / 10 !== 100) { nbs_weightsErrEl.style.display = 'block'; valid = false; }
+    else nbs_weightsErrEl.style.display = 'none';
+
+    const err_polygon = document.getElementById('err_polygon');
+    if (!merged_polygon) { err_polygon.style.display = 'block'; valid = false; }
+    else err_polygon.style.display = 'none';
+
+  if (!valid) return;
+
+  const payload = {};
+    payload['mode'] = "custom";
+    payload['city'] = form.elements['city'].value;
+
+    const weather = {};
+    weather['temperature'] = parseFloat(form.elements['weather.temperature'].value);
+    weather['precipitation'] = parseFloat(form.elements['weather.precipitation'].value);
+    weather['humidity'] = parseFloat(form.elements['weather.humidity'].value);
+    weather['antecedent_precip_7d'] = parseFloat(form.elements['weather.antecedent_precip_7d'].value);
+    payload['weather'] = weather;
+
+    const nbs_weights = {};
+    nbs_weightsInputs.forEach(i => { nbs_weights[i.name.replace('nbs_weights.', '')] = parseFloat(i.value) || 0; });
+    payload['nbs_weights'] = nbs_weights;
+    payload['polygon'] = merged_polygon;
+
+  window.parent.postMessage({
+    type: 'analysis-submit',
+    analysisId: '69f36bd417578b6da9c762a8',
+    data: payload
+  }, '*');
+});
+
+
+function cancel() {
+  window.parent.postMessage({ type: 'analysis-cancel' }, '*');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3-30-300 Analysis</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    background: #f8f9fa;
+    color: #1a1a2e;
+    padding: 20px;
+  }
+
+  h1 { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+  .desc { color: #555; font-size: 13px; margin-bottom: 20px; }
+
+  .section { margin-bottom: 18px; }
+  .section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #3a7bd5;
+    margin-bottom: 10px;
+  }
+  .optional-badge {
+    font-size: 10px;
+    font-weight: 500;
+    color: #888;
+    background: #f0f0f0;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: 6px;
+    vertical-align: middle;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  label { display: block; font-weight: 500; margin-bottom: 4px; font-size: 13px; }
+  label .req { color: #e53e3e; margin-left: 2px; }
+  .hint { font-size: 11px; color: #888; margin-bottom: 6px; }
+
+  select, input[type="text"], input[type="number"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    color: #1a1a2e;
+    margin-bottom: 12px;
+    transition: border-color .15s;
+  }
+  select:focus, input:focus {
+    outline: none;
+    border-color: #3a7bd5;
+    box-shadow: 0 0 0 3px rgba(58,123,213,.12);
+  }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+
+  /* Radio cards (enum <= 4 options) */
+  .radio-card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .radio-card { position: relative; cursor: pointer; }
+  .radio-card input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+  .radio-card label {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    border: 2px solid #d0d7de;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    font-weight: 400;
+    margin-bottom: 0;
+  }
+  .radio-card input[type="radio"]:checked + label {
+    border-color: #3a7bd5;
+    background: #f0f4ff;
+  }
+
+  /* Object numeric fields with constrained sum */
+  .obj-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 14px;
+  }
+  .obj-item label { font-weight: 400; }
+  .obj-sum {
+    font-size: 12px;
+    margin-top: 6px;
+    padding: 6px 10px;
+    border-radius: 5px;
+    background: #f0f4ff;
+  }
+  .obj-sum.ok { background: #e6ffed; color: #276749; }
+  .obj-sum.err { background: #fff5f5; color: #c53030; }
+
+  /* Map */
+  .map-wrap { position: relative; margin-bottom: 6px; }
+  .map-container { height: 340px; width: 100%; max-width: 100%; overflow: hidden; border: 1px solid #d0d7de; border-radius: 8px; position: relative; }
+  .map-container.phase-active { border-color: #3a7bd5; }
+
+  .map-hint {
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    background: #f0f4ff;
+    color: #3a7bd5;
+  }
+
+  .btn-done-overlay {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    z-index: 1000;
+    padding: 9px 16px;
+    border: none;
+    border-radius: 20px;
+    background: #3a7bd5;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    transition: opacity .15s, transform .15s;
+  }
+  .btn-done-overlay:hover { opacity: .92; transform: translateY(-1px); }
+
+  /* Phase switcher (multiple geo fields in one process) */
+  .phase-bar {
+    display: flex;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .phase-btn {
+    flex: 1;
+    padding: 9px 12px;
+    border: none;
+    background: #f5f7fa;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    color: #555;
+    transition: background .15s, color .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .phase-btn:not(:last-child) { border-right: 1px solid #d0d7de; }
+  .phase-btn.active { background: #3a7bd5; color: #fff; }
+  .phase-btn.done { background: #e6ffed; color: #276749; }
+  .phase-btn:disabled { opacity: .5; cursor: default; }
+
+  /* Multi-feature list (measures / canopy / etc.) */
+  .feature-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .feature-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    background: #fff;
+  }
+  .feature-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .feature-label { flex: 1; font-size: 13px; color: #444; }
+  .feature-prop-input { width: 90px; margin-bottom: 0; text-align: center; }
+  .btn-remove-feature {
+    background: none;
+    border: none;
+    color: #c53030;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 2px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .btn-add {
+    width: 100%;
+    padding: 8px;
+    border: 2px dashed #b0bec5;
+    border-radius: 8px;
+    background: none;
+    color: #555;
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+    margin-top: 6px;
+  }
+  .btn-add:hover:not(:disabled) { border-color: #3a7bd5; color: #3a7bd5; }
+  .btn-add:disabled { opacity: .5; cursor: default; }
+
+  .actions { display: flex; gap: 10px; margin-top: 20px; }
+  button.btn-submit, button.btn-cancel {
+    padding: 9px 20px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: opacity .15s;
+  }
+  button:hover { opacity: .88; }
+  .btn-submit { background: #3a7bd5; color: #fff; flex: 1; }
+  .btn-cancel { background: #e2e8f0; color: #444; }
+
+  .error-msg { color: #c53030; font-size: 12px; margin-bottom: 8px; display: none; }
+</style>
+</head>
+<body>
+
+<h1>3-30-300 Analysis</h1>
+<p class="desc">Process that evaluates urban green infrastructure metrics based on the 3-30-300 rule using canopy data and area of interest footprint.</p>
+
+<form id="analysisForm" novalidate>
+  <div class="section">
+    <div class="section-title">Map</div>
+    <div class="phase-bar">
+      <button type="button" class="phase-btn active" id="btn_bounding_box" onclick="setPhase_geo('bounding_box')">
+        <span id="icon_bounding_box">①</span> Bounding Box
+      </button>
+      <button type="button" class="phase-btn" id="btn_canopy_input" onclick="setPhase_geo('canopy_input')" disabled>
+        <span id="icon_canopy_input">②</span> Canopy Input
+      </button>
+    </div>
+    <div class="map-hint" id="mapHint">Draw the Bounding Box polygon(s).</div>
+    <div class="map-wrap">
+      <div class="map-container phase-active" id="map"></div>
+      <button type="button" class="btn-done-overlay" id="btnDone_bounding_box" onclick="confirmDone_bounding_box()" style="display:none">Done — continue to Canopy Input</button>
+    </div>
+    <span class="error-msg" id="err_bounding_box">Please draw at least one Bounding Box polygon.</span>
+    <span class="error-msg" id="err_canopy_input">Please draw at least one Canopy Input polygon.</span>
+    <span class="error-msg" id="propErr_canopy_input">Please assign a value to each Canopy Input feature.</span>
+    <span class="error-msg" id="containErr_canopy_input">Each Canopy Input polygon must be drawn inside the Bounding Box boundary.</span>
+  </div>
+  <div class="section" id="section_canopy_input" style="display:none">
+    <div class="section-title">Canopy Input</div>
+    <p class="hint">Assign a value to each drawn polygon.</p>
+    <div class="feature-list" id="list_canopy_input"></div>
+  </div>
+  <div class="section">
+    <div class="section-title">City</div>
+    
+    <input type="text" name="city" required>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn-cancel" onclick="cancel()">Cancel</button>
+    <button type="submit" class="btn-submit">Run Analysis</button>
+  </div>
+
+</form>
+
+<script>
+
+
+  // Default center; overridden below by ?lat=&lng=&zoom= query params (if the HTML is
+  // loaded via <iframe src="...">) or by a postMessage({ type: 'set-center', lat, lng, zoom })
+  // sent from the parent window (if loaded via <iframe srcdoc="...">).
+  const DEFAULT_CENTER = [50.88, 4.70];
+  const DEFAULT_ZOOM = 13;
+
+  function readCenterFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const lat = parseFloat(params.get('lat'));
+    const lng = parseFloat(params.get('lng'));
+    const zoom = parseFloat(params.get('zoom'));
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return { lat, lng, zoom: isNaN(zoom) ? DEFAULT_ZOOM : zoom };
+  }
+
+  const initialCenter = readCenterFromQuery();
+  const map = L.map('map').setView(
+    initialCenter ? [initialCenter.lat, initialCenter.lng] : DEFAULT_CENTER,
+    initialCenter ? initialCenter.zoom : DEFAULT_ZOOM
+  );
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  // Let the parent window (re)center the map at any time, e.g. after the user picks a city:
+  // iframe.contentWindow.postMessage({ type: 'set-center', lat, lng, zoom }, '*');
+  window.addEventListener('message', function(ev) {
+    const msg = ev.data;
+    if (!msg || msg.type !== 'set-center') return;
+    const lat = parseFloat(msg.lat);
+    const lng = parseFloat(msg.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    map.setView([lat, lng], isNaN(parseFloat(msg.zoom)) ? map.getZoom() : parseFloat(msg.zoom));
+  });
+
+  // Tell the parent the map is ready to receive a set-center message.
+  window.parent.postMessage({ type: 'analysis-ready' }, '*');
+
+  // Circles are drawn/edited as center+radius in Leaflet; convert to a GeoJSON Polygon
+  // approximation so downstream turf.union / turf.booleanContains and the OGC payload
+  // (which expects Polygon geometries) work uniformly for polygon, rectangle and circle.
+  function layerToPolygonGeometry(layer) {
+    if (layer instanceof L.Circle) {
+      const center = layer.getLatLng();
+      return turf.circle([center.lng, center.lat], layer.getRadius() / 1000, { units: 'kilometers', steps: 64 }).geometry;
+    }
+    return layer.toGeoJSON().geometry;
+  }
+
+  const MEASURE_COLORS = ["#805ad5","#e53e3e","#d69e2e","#38a169","#3182ce","#dd6b20","#d53f8c","#718096"];
+  const fields = ['bounding_box', 'canopy_input'];
+  let currentPhase = 'bounding_box';
+
+  const layer_bounding_box = new L.FeatureGroup().addTo(map);
+  const mergedLayer_bounding_box = new L.FeatureGroup().addTo(map);
+  let items_bounding_box = [];
+  let counter_bounding_box = 0;
+  let merged_bounding_box = null;
+  const layer_canopy_input = new L.FeatureGroup().addTo(map);
+  let items_canopy_input = [];
+  let counter_canopy_input = 0;
+  const labelLayer = new L.FeatureGroup().addTo(map);
+  const draw_bounding_box = new L.Control.Draw({
+    edit: { featureGroup: layer_bounding_box },
+    draw: { polygon: true, rectangle: true, circle: true, polyline: false, marker: false, circlemarker: false }
+  });
+  const draw_canopy_input = new L.Control.Draw({
+    edit: { featureGroup: layer_canopy_input },
+    draw: { polygon: true, rectangle: true, circle: true, polyline: false, marker: false, circlemarker: false }
+  });
+
+  function setPhase_geo(phaseKey) {
+    currentPhase = phaseKey;
+    if (phaseKey !== 'bounding_box') {
+      try { map.removeControl(draw_bounding_box); } catch(e) {}
+      document.getElementById('btn_bounding_box').classList.remove('active');
+    }
+    if (phaseKey !== 'canopy_input') {
+      try { map.removeControl(draw_canopy_input); } catch(e) {}
+      document.getElementById('btn_canopy_input').classList.remove('active');
+    }
+    if (phaseKey === 'bounding_box') {
+      draw_bounding_box.addTo(map);
+      document.getElementById('mapHint').textContent = 'Draw the Bounding Box polygon(s).';
+      document.getElementById('btn_bounding_box').classList.add('active');
+    } else     if (phaseKey === 'canopy_input') {
+      draw_canopy_input.addTo(map);
+      document.getElementById('mapHint').textContent = 'Draw the Canopy Input polygon(s).';
+      document.getElementById('btn_canopy_input').classList.add('active');
+    }
+    fields.forEach(f => {
+      const section = document.getElementById('section_' + f);
+      if (section) section.style.display = (f === phaseKey) ? '' : 'none';
+      const doneBtn = document.getElementById('btnDone_' + f);
+      if (doneBtn) doneBtn.style.display = (f === phaseKey && doneBtn.dataset.hasItems === '1') ? '' : 'none';
+    });
+  }
+
+  function recomputeMerged_bounding_box() {
+    mergedLayer_bounding_box.clearLayers();
+    if (items_bounding_box.length === 0) { merged_bounding_box = null; return; }
+    let acc = turf.polygon(items_bounding_box[0].geometry.coordinates);
+    for (let i = 1; i < items_bounding_box.length; i++) {
+      try {
+        acc = turf.union(acc, turf.polygon(items_bounding_box[i].geometry.coordinates));
+      } catch (err) { /* non-overlapping or invalid geometry: keep accumulated result */ }
+    }
+    merged_bounding_box = acc.geometry;
+    L.geoJSON(merged_bounding_box, {
+      style: { color: '#1a1a2e', weight: 3, dashArray: '6 4', fillColor: '#3a7bd5', fillOpacity: 0.12, interactive: false }
+    }).addTo(mergedLayer_bounding_box);
+  }
+
+  draw_bounding_box.addTo(map);
+
+  map.on(L.Draw.Event.CREATED, function(e) {
+    if (currentPhase === 'bounding_box') {
+      counter_bounding_box++;
+      const idx = counter_bounding_box;
+      if (e.layer.setStyle) e.layer.setStyle({ stroke: false, fill: false });
+      layer_bounding_box.addLayer(e.layer);
+      items_bounding_box.push({ idx, layer: e.layer, geometry: layerToPolygonGeometry(e.layer) });
+      recomputeMerged_bounding_box();
+      const doneBtn_bounding_box = document.getElementById('btnDone_bounding_box');
+      if (doneBtn_bounding_box) { doneBtn_bounding_box.style.display = ''; doneBtn_bounding_box.dataset.hasItems = '1'; }
+    } else     if (currentPhase === 'canopy_input') {
+      const drawnGeom_canopy_input = layerToPolygonGeometry(e.layer);
+      if (merged_bounding_box && !turf.booleanContains(turf.feature(merged_bounding_box), turf.feature(drawnGeom_canopy_input))) {
+        layer_canopy_input.removeLayer(e.layer);
+        document.getElementById('containErr_canopy_input').style.display = 'block';
+        return;
+      }
+      document.getElementById('containErr_canopy_input').style.display = 'none';
+      counter_canopy_input++;
+      const idx = counter_canopy_input;
+      if (e.layer.setStyle) e.layer.setStyle({ color: MEASURE_COLORS[(idx - 1) % MEASURE_COLORS.length], fillOpacity: 0.25 });
+      layer_canopy_input.addLayer(e.layer);
+      const color = MEASURE_COLORS[(idx - 1) % MEASURE_COLORS.length];
+      const center = e.layer.getBounds().getCenter();
+      const icon = L.divIcon({
+        html: '<div style="background:' + color + ';color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.3)">' + idx + '</div>',
+        className: '', iconSize: [22, 22], iconAnchor: [11, 11]
+      });
+      const marker = L.marker(center, { icon, interactive: false }).addTo(labelLayer);
+      items_canopy_input.push({ idx, layer: e.layer, marker, color, geometry: drawnGeom_canopy_input, propValue: null });
+      renderList_canopy_input();
+    }
+  });
+
+  map.on(L.Draw.Event.DELETED, function(e) {
+    if (currentPhase === 'bounding_box') {
+      const deletedIdx = new Set();
+      e.layers.eachLayer(l => {
+        const m = items_bounding_box.find(m => m.layer === l);
+        if (m) deletedIdx.add(m.idx);
+      });
+      items_bounding_box = items_bounding_box.filter(m => !deletedIdx.has(m.idx));
+      recomputeMerged_bounding_box();
+      if (items_bounding_box.length === 0) {
+        const doneBtn_bounding_box = document.getElementById('btnDone_bounding_box');
+        if (doneBtn_bounding_box) { doneBtn_bounding_box.style.display = 'none'; doneBtn_bounding_box.dataset.hasItems = ''; }
+        document.getElementById('btn_bounding_box').classList.remove('done');
+        document.getElementById('icon_bounding_box').textContent = '①';
+      }
+    } else     if (currentPhase === 'canopy_input') {
+      const deletedIdx = new Set();
+      e.layers.eachLayer(l => {
+        const m = items_canopy_input.find(m => m.layer === l);
+        if (m) { deletedIdx.add(m.idx); labelLayer.removeLayer(m.marker); }
+      });
+      items_canopy_input = items_canopy_input.filter(m => !deletedIdx.has(m.idx));
+      renderList_canopy_input();
+    }
+  });
+
+  function renderList_canopy_input() {
+    const list = document.getElementById('list_canopy_input');
+    list.innerHTML = '';
+    items_canopy_input.forEach(m => {
+      const row = document.createElement('div');
+      row.className = 'feature-row';
+      row.innerHTML = '<div class="feature-swatch" style="background:' + m.color + '"></div>' +
+        '<span class="feature-label">Canopy Input #' + m.idx + '</span>' +
+        '<input type="number" class="feature-prop-input" id="prop_canopy_input_' + m.idx + '" placeholder="height" value="' + (m.propValue ?? '') + '">' +
+        '<button type="button" class="btn-remove-feature" onclick="removeItem_canopy_input(' + m.idx + ')">×</button>';
+      list.appendChild(row);
+      row.querySelector('#prop_canopy_input_' + m.idx).addEventListener('input', function() {
+        const entry = items_canopy_input.find(x => x.idx === m.idx);
+        if (entry) entry.propValue = parseFloat(this.value);
+      });
+    });
+    document.getElementById('section_canopy_input').style.display = items_canopy_input.length ? '' : (currentPhase === 'canopy_input' ? '' : 'none');
+  }
+  function removeItem_canopy_input(idx) {
+    const m = items_canopy_input.find(x => x.idx === idx);
+    if (!m) return;
+    layer_canopy_input.removeLayer(m.layer);
+    labelLayer.removeLayer(m.marker);
+    items_canopy_input = items_canopy_input.filter(x => x.idx !== idx);
+    renderList_canopy_input();
+  }
+
+  function confirmDone_bounding_box() {
+    if (items_bounding_box.length === 0) return;
+    document.getElementById('btn_bounding_box').classList.remove('active');
+    document.getElementById('btn_bounding_box').classList.add('done');
+    document.getElementById('icon_bounding_box').textContent = '✓';
+    document.getElementById('btn_canopy_input').disabled = false;
+    setPhase_geo('canopy_input');
+  }
+
+
+document.getElementById('analysisForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const form = this;
+  let valid = true;
+
+    const err_bounding_box = document.getElementById('err_bounding_box');
+    if (!merged_bounding_box) { err_bounding_box.style.display = 'block'; valid = false; }
+    else err_bounding_box.style.display = 'none';
+
+    const err_canopy_input = document.getElementById('err_canopy_input');
+    if (items_canopy_input.length === 0) { err_canopy_input.style.display = 'block'; valid = false; }
+    else err_canopy_input.style.display = 'none';
+    const propMissing_canopy_input = items_canopy_input.some(m => m.propValue == null || isNaN(m.propValue));
+    const propErrEl_canopy_input = document.getElementById('propErr_canopy_input');
+    if (propMissing_canopy_input) { propErrEl_canopy_input.style.display = 'block'; valid = false; }
+    else propErrEl_canopy_input.style.display = 'none';
+
+  if (!valid) return;
+
+  const payload = {};
+    payload['city'] = form.elements['city'].value.trim();
+    payload['bounding_box'] = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: merged_bounding_box, properties: {} }] };
+    payload['canopy_input'] = { type: 'FeatureCollection', features: items_canopy_input.map(m => ({ type: 'Feature', geometry: m.geometry, properties: { height: m.propValue } })) };
+
+  window.parent.postMessage({
+    type: 'analysis-submit',
+    analysisId: '6a2290218e779b71e12f6e21',
+    data: payload
+  }, '*');
+});
+
+
+function cancel() {
+  window.parent.postMessage({ type: 'analysis-cancel' }, '*');
+}
+</script>
+</body>
+</html>
