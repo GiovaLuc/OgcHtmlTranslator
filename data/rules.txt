@@ -1,0 +1,12 @@
+Generate one standalone HTML form for the given OGC process (id, title, description, inputs with title/description/minOccurs/maxOccurs/schema).
+
+- Output a complete HTML document (not a fragment), saved as `<processId>.html`.
+- Do not invent fields, options, values, or constraints not present in the input JSON.
+- Derive each control from its JSON Schema shape recursively — never from the field's name. Recurse into `object`/`array` schemas rather than falling back to raw JSON/textarea; only use a textarea when nothing else applies.
+- Mapping: single-value enum/const → hidden, injected at submit. Multi-value enum → choice control. string → text (use `format` for date/uri/email if present). number → decimal input. integer → whole-number input. boolean → checkbox. array → repeatable/multi-select of the item control. oneOf/anyOf/allOf → explicit selector between alternatives, never silently pick one.
+- Apply min/max/minItems/maxItems/etc. from the schema as native constraints. If a description implies a constraint the schema can't express (e.g. values must sum to 100), validate it at submit with an inline error.
+- A field with a geometry-shaped schema (Point/LineString/Polygon/Feature/FeatureCollection, by shape not name) gets a map-drawing control instead of a text/JSON input. Multiple geometry fields share one map with a way to switch which field is being edited. A geometry field allowing multiple shapes with no per-shape properties is a region (merge shapes into one geometry). A geometry field whose items carry required properties is a labeled set (each shape stays distinct, with inline inputs for its properties, built via the same schema rules above). If one geometry field spatially constrains another, validate that relationship. Wrap the drawn geometry at submit to match the field's schema exactly.
+- required = minOccurs >= 1 (mark and validate); repeatable = maxOccurs > 1 or "unbounded" (add/remove interaction).
+- Validate everything client-side on submit; block and show inline errors on failure. Provide submit and cancel actions. Hand off the final payload however the embedding context expects (e.g. postMessage if embedded in an iframe) — don't assume a backend unless specified.
+- If there's a geometry field, let the host page set the initial map view (query string and/or postMessage), with a sensible default fallback.
+- Use semantic, accessible HTML: real `<form>`/`<label for>`/`<fieldset>`, one section per field using its given title/description.

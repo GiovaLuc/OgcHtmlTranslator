@@ -1,0 +1,21 @@
+# Override per il server di produzione (Linux, con Ollama sulla stessa macchina,
+# in ascolto solo su 127.0.0.1:11434). Uso:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# network_mode: host fa condividere al container la rete dell'host, quindi
+# 127.0.0.1:11434 è l'Ollama locale e non serve esporlo all'esterno. Conseguenze:
+#  - il translator ascolta direttamente sulla porta PORT dell'host (default 3001): il
+#    firewall deve lasciarla raggiungibile solo dal proxy;
+#  - "ports:" viene ignorato (qui azzerato con !reset, richiede Docker Compose >= 2.24).
+services:
+  translator:
+    network_mode: host
+    ports: !reset []
+    environment:
+      OLLAMA_BASE_URL: http://127.0.0.1:11434
+    volumes: !override
+      - translator_out:/app/out
+
+volumes:
+  translator_out:

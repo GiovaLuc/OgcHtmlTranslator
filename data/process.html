@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Energy Label Analysis</title>
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+	<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+	<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+	<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+	<style>
+		*,
+		*::before,
+		*::after {
+			box-sizing: border-box;
+			margin: 0;
+			padding: 0;
+		}
+
+		body {
+			font-family: system-ui, -apple-system, sans-serif;
+			font-size: 14px;
+			background: #f8f9fa;
+			color: #1a1a2e;
+			padding: 20px;
+		}
+
+		h1 {
+			font-size: 17px;
+			font-weight: 600;
+			margin-bottom: 4px;
+		}
+
+		.desc {
+			color: #555;
+			font-size: 13px;
+			margin-bottom: 20px;
+		}
+
+		.section {
+			margin-bottom: 18px;
+		}
+
+		.section-title {
+			font-size: 12px;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: .06em;
+			color: #3a7bd5;
+			margin-bottom: 10px;
+		}
+
+		.optional-badge {
+			font-size: 10px;
+			font-weight: 500;
+			color: #888;
+			background: #f0f0f0;
+			border-radius: 4px;
+			padding: 1px 5px;
+			margin-left: 6px;
+			vertical-align: middle;
+			text-transform: none;
+			letter-spacing: 0;
+		}
+
+		label {
+			display: block;
+			font-weight: 500;
+			margin-bottom: 4px;
+			font-size: 13px;
+		}
+
+		label .req {
+			color: #e53e3e;
+			margin-left: 2px;
+		}
+
+		.hint {
+			font-size: 11px;
+			color: #888;
+			margin-bottom: 6px;
+		}
+
+		select,
+		input[type="text"],
+		input[type="number"] {
+			width: 100%;
+			padding: 8px 10px;
+			border: 1px solid #d0d7de;
+			border-radius: 6px;
+			font-size: 13px;
+			background: #fff;
+			color: #1a1a2e;
+			margin-bottom: 12px;
+			transition: border-color .15s;
+		}
+
+		select:focus,
+		input:focus {
+			outline: none;
+			border-color: #3a7bd5;
+			box-shadow: 0 0 0 3px rgba(58, 123, 213, .12);
+		}
+
+		.grid-2 {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 0 14px;
+		}
+
+		/* Radio cards (enum <= 4 options) */
+		.radio-card-grid {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 8px;
+			margin-bottom: 12px;
+		}
+
+		.radio-card {
+			position: relative;
+			cursor: pointer;
+		}
+
+		.radio-card input[type="radio"] {
+			position: absolute;
+			opacity: 0;
+			width: 0;
+			height: 0;
+		}
+
+		.radio-card label {
+			display: flex;
+			align-items: center;
+			padding: 10px 12px;
+			border: 2px solid #d0d7de;
+			border-radius: 8px;
+			background: #fff;
+			cursor: pointer;
+			transition: border-color .15s, background .15s;
+			font-weight: 400;
+			margin-bottom: 0;
+		}
+
+		.radio-card input[type="radio"]:checked+label {
+			border-color: #3a7bd5;
+			background: #f0f4ff;
+		}
+
+		/* Object numeric fields with constrained sum */
+		.obj-grid {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 6px 14px;
+		}
+
+		.obj-item label {
+			font-weight: 400;
+		}
+
+		.obj-sum {
+			font-size: 12px;
+			margin-top: 6px;
+			padding: 6px 10px;
+			border-radius: 5px;
+			background: #f0f4ff;
+		}
+
+		.obj-sum.ok {
+			background: #e6ffed;
+			color: #276749;
+		}
+
+		.obj-sum.err {
+			background: #fff5f5;
+			color: #c53030;
+		}
+
+		/* Map */
+		.map-wrap {
+			position: relative;
+			margin-bottom: 6px;
+		}
+
+		.map-container {
+			height: 340px;
+			width: 100%;
+			max-width: 100%;
+			overflow: hidden;
+			border: 1px solid #d0d7de;
+			border-radius: 8px;
+			position: relative;
+		}
+
+		.map-container.phase-active {
+			border-color: #3a7bd5;
+		}
+
+		.map-hint {
+			font-size: 11px;
+			padding: 6px 10px;
+			border-radius: 6px;
+			margin-bottom: 10px;
+			background: #f0f4ff;
+			color: #3a7bd5;
+		}
+
+		.btn-done-overlay {
+			position: absolute;
+			right: 10px;
+			bottom: 10px;
+			z-index: 1000;
+			padding: 9px 16px;
+			border: none;
+			border-radius: 20px;
+			background: #3a7bd5;
+			color: #fff;
+			font-size: 13px;
+			font-weight: 600;
+			cursor: pointer;
+			box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+			transition: opacity .15s, transform .15s;
+		}
+
+		.btn-done-overlay:hover {
+			opacity: .92;
+			transform: translateY(-1px);
+		}
+
+		/* Phase switcher (multiple geo fields in one process) */
+		.phase-bar {
+			display: flex;
+			border: 1px solid #d0d7de;
+			border-radius: 8px;
+			overflow: hidden;
+			margin-bottom: 10px;
+		}
+
+		.phase-btn {
+			flex: 1;
+			padding: 9px 12px;
+			border: none;
+			background: #f5f7fa;
+			font-size: 13px;
+			font-weight: 500;
+			cursor: pointer;
+			color: #555;
+			transition: background .15s, color .15s;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 6px;
+		}
+
+		.phase-btn:not(:last-child) {
+			border-right: 1px solid #d0d7de;
+		}
+
+		.phase-btn.active {
+			background: #3a7bd5;
+			color: #fff;
+		}
+
+		.phase-btn.done {
+			background: #e6ffed;
+			color: #276749;
+		}
+
+		.phase-btn:disabled {
+			opacity: .5;
+			cursor: default;
+		}
+
+		/* Multi-feature list (measures / canopy / etc.) */
+		.feature-list {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			margin-bottom: 10px;
+		}
+
+		.feature-row {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 8px 10px;
+			border: 1px solid #d0d7de;
+			border-radius: 6px;
+			background: #fff;
+		}
+
+		.feature-swatch {
+			width: 14px;
+			height: 14px;
+			border-radius: 3px;
+			flex-shrink: 0;
+		}
+
+		.feature-label {
+			flex: 1;
+			font-size: 13px;
+			color: #444;
+		}
+
+		.feature-prop-input {
+			width: 90px;
+			margin-bottom: 0;
+			text-align: center;
+		}
+
+		.btn-remove-feature {
+			background: none;
+			border: none;
+			color: #c53030;
+			font-size: 16px;
+			cursor: pointer;
+			padding: 0 2px;
+			font-weight: 700;
+			line-height: 1;
+		}
+
+		.btn-add {
+			width: 100%;
+			padding: 8px;
+			border: 2px dashed #b0bec5;
+			border-radius: 8px;
+			background: none;
+			color: #555;
+			font-size: 13px;
+			cursor: pointer;
+			transition: border-color .15s, color .15s;
+			margin-top: 6px;
+		}
+
+		.btn-add:hover:not(:disabled) {
+			border-color: #3a7bd5;
+			color: #3a7bd5;
+		}
+
+		.btn-add:disabled {
+			opacity: .5;
+			cursor: default;
+		}
+
+		.actions {
+			display: flex;
+			gap: 10px;
+			margin-top: 20px;
+		}
+
+		button.btn-submit,
+		button.btn-cancel {
+			padding: 9px 20px;
+			border-radius: 6px;
+			border: none;
+			cursor: pointer;
+			font-size: 13px;
+			font-weight: 500;
+			transition: opacity .15s;
+		}
+
+		button:hover {
+			opacity: .88;
+		}
+
+		.btn-submit {
+			background: #3a7bd5;
+			color: #fff;
+			flex: 1;
+		}
+
+		.btn-cancel {
+			background: #e2e8f0;
+			color: #444;
+		}
+
+		.error-msg {
+			color: #c53030;
+			font-size: 12px;
+			margin-bottom: 8px;
+			display: none;
+		}
+	</style>
+</head>
+
+<body>
+
+	<h1>Energy Label Analysis</h1>
+	<p class="desc">Process that executes building infiltration and performance analysis based on environmental metrics.
+	</p>
+
+	<form id="analysisForm" novalidate>
+		<div class="section">
+			<div class="section-title">Map</div>
+			<div class="map-hint" id="mapHint">Draw the Study Area polygon(s).</div>
+			<div class="map-wrap">
+				<div class="map-container phase-active" id="map"></div>
+
+			</div>
+			<span class="error-msg" id="err_study_area">Please draw at least one Study Area polygon.</span>
+		</div>
+		<div class="section">
+			<div class="section-title">Annual CO2 Emissions</div>
+			<p class="hint">Annual carbon dioxide emissions per square meter (kg/m²).</p>
+			<input type="number" name="co2_emissions" step="0.1" required>
+  </div>
+			<div class="section">
+				<div class="section-title">Annual Energy Consumption</div>
+				<p class="hint">Annual primary energy consumption per square meter (kWh/m²).</p>
+				<input type="number" name="energy_consumption" step="0.1" required>
+  </div>
+				<div class="actions">
+					<button type="button" class="btn-cancel" onclick="cancel()">Cancel</button>
+					<button type="submit" class="btn-submit">Run Analysis</button>
+				</div>
+
+	</form>
+
+	<script>
+		// Default center; overridden below by ?lat=&lng=&zoom= query params (if the HTML is
+  // loaded via <iframe src="...">) or by a postMessage({ type: 'set-center', lat, lng, zoom })
+  // sent from the parent window (if loaded via <iframe srcdoc="...">).
+  const DEFAULT_CENTER = [50.88, 4.70];
+  const DEFAULT_ZOOM = 13;
+
+  function readCenterFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const lat = parseFloat(params.get('lat'));
+    const lng = parseFloat(params.get('lng'));
+    const zoom = parseFloat(params.get('zoom'));
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return { lat, lng, zoom: isNaN(zoom) ? DEFAULT_ZOOM : zoom };
+  }
+
+  const initialCenter = readCenterFromQuery();
+  const map = L.map('map').setView(
+    initialCenter ? [initialCenter.lat, initialCenter.lng] : DEFAULT_CENTER,
+    initialCenter ? initialCenter.zoom : DEFAULT_ZOOM
+  );
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  // Let the parent window (re)center the map at any time, e.g. after the user picks a city:
+  // iframe.contentWindow.postMessage({ type: 'set-center', lat, lng, zoom }, '*');
+  window.addEventListener('message', function(ev) {
+    const msg = ev.data;
+    if (!msg || msg.type !== 'set-center') return;
+    const lat = parseFloat(msg.lat);
+    const lng = parseFloat(msg.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    map.setView([lat, lng], isNaN(parseFloat(msg.zoom)) ? map.getZoom() : parseFloat(msg.zoom));
+  });
+
+  // Tell the parent the map is ready to receive a set-center message.
+  window.parent.postMessage({ type: 'analysis-ready' }, '*');
+
+  // Circles are drawn/edited as center+radius in Leaflet; convert to a GeoJSON Polygon
+  // approximation so downstream turf.union / turf.booleanContains and the OGC payload
+  // (which expects Polygon geometries) work uniformly for polygon, rectangle and circle.
+  function layerToPolygonGeometry(layer) {
+    if (layer instanceof L.Circle) {
+      const center = layer.getLatLng();
+      return turf.circle([center.lng, center.lat], layer.getRadius() / 1000, { units: 'kilometers', steps: 64 }).geometry;
+    }
+    return layer.toGeoJSON().geometry;
+  }
+
+  const MEASURE_COLORS = ["#805ad5","#e53e3e","#d69e2e","#38a169","#3182ce","#dd6b20","#d53f8c","#718096"];
+  const fields = ['study_area'];
+  let currentPhase = 'study_area';
+
+  const layer_study_area = new L.FeatureGroup().addTo(map);
+  const mergedLayer_study_area = new L.FeatureGroup().addTo(map);
+  let items_study_area = [];
+  let counter_study_area = 0;
+  let merged_study_area = null;
+  const labelLayer = new L.FeatureGroup().addTo(map);
+  const draw_study_area = new L.Control.Draw({
+    edit: { featureGroup: layer_study_area },
+    draw: { polygon: true, rectangle: true, circle: true, polyline: false, marker: false, circlemarker: false }
+  });
+
+
+  function recomputeMerged_study_area() {
+    mergedLayer_study_area.clearLayers();
+    if (items_study_area.length === 0) { merged_study_area = null; return; }
+    let acc = turf.polygon(items_study_area[0].geometry.coordinates);
+    for (let i = 1; i < items_study_area.length; i++) {
+      try {
+        acc = turf.union(acc, turf.polygon(items_study_area[i].geometry.coordinates));
+      } catch (err) { /* non-overlapping or invalid geometry: keep accumulated result */ }
+    }
+    merged_study_area = acc.geometry;
+    L.geoJSON(merged_study_area, {
+      style: { color: '#1a1a2e', weight: 3, dashArray: '6 4', fillColor: '#3a7bd5', fillOpacity: 0.12, interactive: false }
+    }).addTo(mergedLayer_study_area);
+  }
+
+  draw_study_area.addTo(map);
+
+  map.on(L.Draw.Event.CREATED, function(e) {
+    if (currentPhase === 'study_area') {
+      counter_study_area++;
+      const idx = counter_study_area;
+      if (e.layer.setStyle) e.layer.setStyle({ stroke: false, fill: false });
+      layer_study_area.addLayer(e.layer);
+      items_study_area.push({ idx, layer: e.layer, geometry: layerToPolygonGeometry(e.layer) });
+      recomputeMerged_study_area();
+      
+    }
+  });
+
+  map.on(L.Draw.Event.DELETED, function(e) {
+    if (currentPhase === 'study_area') {
+      const deletedIdx = new Set();
+      e.layers.eachLayer(l => {
+        const m = items_study_area.find(m => m.layer === l);
+        if (m) deletedIdx.add(m.idx);
+      });
+      items_study_area = items_study_area.filter(m => !deletedIdx.has(m.idx));
+      recomputeMerged_study_area();
+      if (items_study_area.length === 0) {
+        const doneBtn_study_area = document.getElementById('btnDone_study_area');
+        if (doneBtn_study_area) { doneBtn_study_area.style.display = 'none'; doneBtn_study_area.dataset.hasItems = ''; }
+        
+      }
+    }
+  });
+
+
+document.getElementById('analysisForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const form = this;
+  let valid = true;
+
+    const err_study_area = document.getElementById('err_study_area');
+    if (!merged_study_area) { err_study_area.style.display = 'block'; valid = false; }
+    else err_study_area.style.display = 'none';
+
+  if (!valid) return;
+
+  const payload = {};
+    payload['co2_emissions'] = parseFloat(form.elements['co2_emissions'].value);
+    payload['energy_consumption'] = parseFloat(form.elements['energy_consumption'].value);
+    payload['study_area'] = { type: 'Feature', geometry: merged_study_area, properties: {} };
+
+  window.parent.postMessage({
+    type: 'analysis-submit',
+    analysisId: '6a267ba527f6d6566629ce1e',
+    data: payload
+  }, '*');
+});
+
+
+function cancel() {
+  window.parent.postMessage({ type: 'analysis-cancel' }, '*');
+}
+	</script>
+</body>
+
+</html>

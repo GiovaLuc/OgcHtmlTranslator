@@ -1,0 +1,15 @@
+services:
+  translator:
+    build: .
+    ports:
+      - "${PORT:-3001}:3001"
+    env_file:
+      - .env
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    volumes:
+      # L'output di ogni job (HTML + log) va su file (vedi translator.js) — montato
+      # come volume così sopravvive a un rebuild/restart del container, non solo al
+      # filesystem effimero dell'immagine.
+      - ./out:/app/out
+    restart: unless-stopped

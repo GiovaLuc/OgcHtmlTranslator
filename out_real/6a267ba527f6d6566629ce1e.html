@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Energy Label Analysis</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    background: #f8f9fa;
+    color: #1a1a2e;
+    padding: 20px;
+  }
+
+  h1 { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+  .desc { color: #555; font-size: 13px; margin-bottom: 20px; }
+
+  .section { margin-bottom: 18px; }
+  .section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #3a7bd5;
+    margin-bottom: 10px;
+  }
+  .optional-badge {
+    font-size: 10px;
+    font-weight: 500;
+    color: #888;
+    background: #f0f0f0;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: 6px;
+    vertical-align: middle;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  label { display: block; font-weight: 500; margin-bottom: 4px; font-size: 13px; }
+  label .req { color: #e53e3e; margin-left: 2px; }
+  .hint { font-size: 11px; color: #888; margin-bottom: 6px; }
+
+  select, input[type="text"], input[type="number"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    color: #1a1a2e;
+    margin-bottom: 12px;
+    transition: border-color .15s;
+  }
+  select:focus, input:focus {
+    outline: none;
+    border-color: #3a7bd5;
+    box-shadow: 0 0 0 3px rgba(58,123,213,.12);
+  }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+
+  /* Radio cards (enum <= 4 options) */
+  .radio-card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .radio-card { position: relative; cursor: pointer; }
+  .radio-card input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+  .radio-card label {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    border: 2px solid #d0d7de;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    font-weight: 400;
+    margin-bottom: 0;
+  }
+  .radio-card input[type="radio"]:checked + label {
+    border-color: #3a7bd5;
+    background: #f0f4ff;
+  }
+
+  /* Object numeric fields with constrained sum */
+  .obj-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 14px;
+  }
+  .obj-item label { font-weight: 400; }
+  .obj-sum {
+    font-size: 12px;
+    margin-top: 6px;
+    padding: 6px 10px;
+    border-radius: 5px;
+    background: #f0f4ff;
+  }
+  .obj-sum.ok { background: #e6ffed; color: #276749; }
+  .obj-sum.err { background: #fff5f5; color: #c53030; }
+
+  /* Map */
+  .map-wrap { position: relative; margin-bottom: 6px; }
+  .map-container { height: 340px; width: 100%; max-width: 100%; overflow: hidden; border: 1px solid #d0d7de; border-radius: 8px; position: relative; }
+  .map-container.phase-active { border-color: #3a7bd5; }
+
+  .map-hint {
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    background: #f0f4ff;
+    color: #3a7bd5;
+  }
+
+  .btn-done-overlay {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    z-index: 1000;
+    padding: 9px 16px;
+    border: none;
+    border-radius: 20px;
+    background: #3a7bd5;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    transition: opacity .15s, transform .15s;
+  }
+  .btn-done-overlay:hover { opacity: .92; transform: translateY(-1px); }
+
+  /* Phase switcher (multiple geo fields in one process) */
+  .phase-bar {
+    display: flex;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .phase-btn {
+    flex: 1;
+    padding: 9px 12px;
+    border: none;
+    background: #f5f7fa;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    color: #555;
+    transition: background .15s, color .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .phase-btn:not(:last-child) { border-right: 1px solid #d0d7de; }
+  .phase-btn.active { background: #3a7bd5; color: #fff; }
+  .phase-btn.done { background: #e6ffed; color: #276749; }
+  .phase-btn:disabled { opacity: .5; cursor: default; }
+
+  /* Multi-feature list (measures / canopy / etc.) */
+  .feature-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .feature-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    background: #fff;
+  }
+  .feature-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .feature-label { flex: 1; font-size: 13px; color: #444; }
+  .feature-prop-input { width: 90px; margin-bottom: 0; text-align: center; }
+  .btn-remove-feature {
+    background: none;
+    border: none;
+    color: #c53030;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 2px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .btn-add {
+    width: 100%;
+    padding: 8px;
+    border: 2px dashed #b0bec5;
+    border-radius: 8px;
+    background: none;
+    color: #555;
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+    margin-top: 6px;
+  }
+  .btn-add:hover:not(:disabled) { border-color: #3a7bd5; color: #3a7bd5; }
+  .btn-add:disabled { opacity: .5; cursor: default; }
+
+  .actions { display: flex; gap: 10px; margin-top: 20px; }
+  button.btn-submit, button.btn-cancel {
+    padding: 9px 20px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: opacity .15s;
+  }
+  button:hover { opacity: .88; }
+  .btn-submit { background: #3a7bd5; color: #fff; flex: 1; }
+  .btn-cancel { background: #e2e8f0; color: #444; }
+
+  .error-msg { color: #c53030; font-size: 12px; margin-bottom: 8px; display: none; }
+</style>
+</head>
+<body>
+
+<h1>Energy Label Analysis</h1>
+<p class="desc">Process that executes building infiltration and performance analysis based on environmental metrics.</p>
+
+<form id="analysisForm" novalidate>
+  <div class="section">
+    <div class="section-title">Map</div>
+    <div class="map-hint" id="mapHint">Draw the Study Area polygon(s).</div>
+    <div class="map-wrap">
+      <div class="map-container phase-active" id="map"></div>
+
+    </div>
+    <span class="error-msg" id="err_study_area">Please draw at least one Study Area polygon.</span>
+  </div>
+  <div class="section">
+    <div class="section-title">Annual CO2 Emissions</div>
+    <p class="hint">Annual carbon dioxide emissions per square meter (kg/m²).</p>
+    <input type="number" name="co2_emissions" id="co2_emissions" step="any" required>
+    <span class="error-msg" id="co2_emissionsErr">Invalid value.</span>
+  </div>
+  <div class="section">
+    <div class="section-title">Annual Energy Consumption</div>
+    <p class="hint">Annual primary energy consumption per square meter (kWh/m²).</p>
+    <input type="number" name="energy_consumption" id="energy_consumption" step="any" required>
+    <span class="error-msg" id="energy_consumptionErr">Invalid value.</span>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn-cancel" onclick="cancel()">Cancel</button>
+    <button type="submit" class="btn-submit">Run Analysis</button>
+  </div>
+
+</form>
+
+<script>
+var jsep=function(){"use strict";class e{static get version(){return"1.4.0"}static toString(){return"JavaScript Expression Parser (JSEP) v"+e.version}static addUnaryOp(t){return e.max_unop_len=Math.max(t.length,e.max_unop_len),e.unary_ops[t]=1,e}static addBinaryOp(t,r,i){return e.max_binop_len=Math.max(t.length,e.max_binop_len),e.binary_ops[t]=r,i?e.right_associative.add(t):e.right_associative.delete(t),e}static addIdentifierChar(t){return e.additional_identifier_chars.add(t),e}static addLiteral(t,r){return e.literals[t]=r,e}static removeUnaryOp(t){return delete e.unary_ops[t],t.length===e.max_unop_len&&(e.max_unop_len=e.getMaxKeyLen(e.unary_ops)),e}static removeAllUnaryOps(){return e.unary_ops={},e.max_unop_len=0,e}static removeIdentifierChar(t){return e.additional_identifier_chars.delete(t),e}static removeBinaryOp(t){return delete e.binary_ops[t],t.length===e.max_binop_len&&(e.max_binop_len=e.getMaxKeyLen(e.binary_ops)),e.right_associative.delete(t),e}static removeAllBinaryOps(){return e.binary_ops={},e.max_binop_len=0,e}static removeLiteral(t){return delete e.literals[t],e}static removeAllLiterals(){return e.literals={},e}get char(){return this.expr.charAt(this.index)}get code(){return this.expr.charCodeAt(this.index)}constructor(e){this.expr=e,this.index=0}static parse(t){return new e(t).parse()}static getMaxKeyLen(e){return Math.max(0,...Object.keys(e).map((e=>e.length)))}static isDecimalDigit(e){return e>=48&&e<=57}static binaryPrecedence(t){return e.binary_ops[t]||0}static isIdentifierStart(t){return t>=65&&t<=90||t>=97&&t<=122||t>=128&&!e.binary_ops[String.fromCharCode(t)]||e.additional_identifier_chars.has(String.fromCharCode(t))}static isIdentifierPart(t){return e.isIdentifierStart(t)||e.isDecimalDigit(t)}throwError(e){const t=new Error(e+" at character "+this.index);throw t.index=this.index,t.description=e,t}runHook(t,r){if(e.hooks[t]){const i={context:this,node:r};return e.hooks.run(t,i),i.node}return r}searchHook(t){if(e.hooks[t]){const r={context:this};return e.hooks[t].find((function(e){return e.call(r.context,r),r.node})),r.node}}gobbleSpaces(){let t=this.code;for(;t===e.SPACE_CODE||t===e.TAB_CODE||t===e.LF_CODE||t===e.CR_CODE;)t=this.expr.charCodeAt(++this.index);this.runHook("gobble-spaces")}parse(){this.runHook("before-all");const t=this.gobbleExpressions(),r=1===t.length?t[0]:{type:e.COMPOUND,body:t};return this.runHook("after-all",r)}gobbleExpressions(t){let r,i,s=[];for(;this.index<this.expr.length;)if(r=this.code,r===e.SEMCOL_CODE||r===e.COMMA_CODE)this.index++;else if(i=this.gobbleExpression())s.push(i);else if(this.index<this.expr.length){if(r===t)break;this.throwError('Unexpected "'+this.char+'"')}return s}gobbleExpression(){const e=this.searchHook("gobble-expression")||this.gobbleBinaryExpression();return this.gobbleSpaces(),this.runHook("after-expression",e)}gobbleBinaryOp(){this.gobbleSpaces();let t=this.expr.substr(this.index,e.max_binop_len),r=t.length;for(;r>0;){if(e.binary_ops.hasOwnProperty(t)&&(!e.isIdentifierStart(this.code)||this.index+t.length<this.expr.length&&!e.isIdentifierPart(this.expr.charCodeAt(this.index+t.length))))return this.index+=r,t;t=t.substr(0,--r)}return!1}gobbleBinaryExpression(){let t,r,i,s,n,o,h,a,l;if(o=this.gobbleToken(),!o)return o;if(r=this.gobbleBinaryOp(),!r)return o;for(n={value:r,prec:e.binaryPrecedence(r),right_a:e.right_associative.has(r)},h=this.gobbleToken(),h||this.throwError("Expected expression after "+r),s=[o,n,h];r=this.gobbleBinaryOp();){if(i=e.binaryPrecedence(r),0===i){this.index-=r.length;break}n={value:r,prec:i,right_a:e.right_associative.has(r)},l=r;const a=e=>n.right_a&&e.right_a?i>e.prec:i<=e.prec;for(;s.length>2&&a(s[s.length-2]);)h=s.pop(),r=s.pop().value,o=s.pop(),t={type:e.BINARY_EXP,operator:r,left:o,right:h},s.push(t);t=this.gobbleToken(),t||this.throwError("Expected expression after "+l),s.push(n,t)}for(a=s.length-1,t=s[a];a>1;)t={type:e.BINARY_EXP,operator:s[a-1].value,left:s[a-2],right:t},a-=2;return t}gobbleToken(){let t,r,i,s;if(this.gobbleSpaces(),s=this.searchHook("gobble-token"),s)return this.runHook("after-token",s);if(t=this.code,e.isDecimalDigit(t)||t===e.PERIOD_CODE)return this.gobbleNumericLiteral();if(t===e.SQUOTE_CODE||t===e.DQUOTE_CODE)s=this.gobbleStringLiteral();else if(t===e.OBRACK_CODE)s=this.gobbleArray();else{for(r=this.expr.substr(this.index,e.max_unop_len),i=r.length;i>0;){if(e.unary_ops.hasOwnProperty(r)&&(!e.isIdentifierStart(this.code)||this.index+r.length<this.expr.length&&!e.isIdentifierPart(this.expr.charCodeAt(this.index+r.length)))){this.index+=i;const t=this.gobbleToken();return t||this.throwError("missing unaryOp argument"),this.runHook("after-token",{type:e.UNARY_EXP,operator:r,argument:t,prefix:!0})}r=r.substr(0,--i)}e.isIdentifierStart(t)?(s=this.gobbleIdentifier(),e.literals.hasOwnProperty(s.name)?s={type:e.LITERAL,value:e.literals[s.name],raw:s.name}:s.name===e.this_str&&(s={type:e.THIS_EXP})):t===e.OPAREN_CODE&&(s=this.gobbleGroup())}return s?(s=this.gobbleTokenProperty(s),this.runHook("after-token",s)):this.runHook("after-token",!1)}gobbleTokenProperty(t){this.gobbleSpaces();let r=this.code;for(;r===e.PERIOD_CODE||r===e.OBRACK_CODE||r===e.OPAREN_CODE||r===e.QUMARK_CODE;){let i;if(r===e.QUMARK_CODE){if(this.expr.charCodeAt(this.index+1)!==e.PERIOD_CODE)break;i=!0,this.index+=2,this.gobbleSpaces(),r=this.code}this.index++,r===e.OBRACK_CODE?((t={type:e.MEMBER_EXP,computed:!0,object:t,property:this.gobbleExpression()}).property||this.throwError('Unexpected "'+this.char+'"'),this.gobbleSpaces(),r=this.code,r!==e.CBRACK_CODE&&this.throwError("Unclosed ["),this.index++):r===e.OPAREN_CODE?t={type:e.CALL_EXP,arguments:this.gobbleArguments(e.CPAREN_CODE),callee:t}:(r===e.PERIOD_CODE||i)&&(i&&this.index--,this.gobbleSpaces(),t={type:e.MEMBER_EXP,computed:!1,object:t,property:this.gobbleIdentifier()}),i&&(t.optional=!0),this.gobbleSpaces(),r=this.code}return t}gobbleNumericLiteral(){let t,r,i="";for(;e.isDecimalDigit(this.code);)i+=this.expr.charAt(this.index++);if(this.code===e.PERIOD_CODE)for(i+=this.expr.charAt(this.index++);e.isDecimalDigit(this.code);)i+=this.expr.charAt(this.index++);if(t=this.char,"e"===t||"E"===t){for(i+=this.expr.charAt(this.index++),t=this.char,"+"!==t&&"-"!==t||(i+=this.expr.charAt(this.index++));e.isDecimalDigit(this.code);)i+=this.expr.charAt(this.index++);e.isDecimalDigit(this.expr.charCodeAt(this.index-1))||this.throwError("Expected exponent ("+i+this.char+")")}return r=this.code,e.isIdentifierStart(r)?this.throwError("Variable names cannot start with a number ("+i+this.char+")"):(r===e.PERIOD_CODE||1===i.length&&i.charCodeAt(0)===e.PERIOD_CODE)&&this.throwError("Unexpected period"),{type:e.LITERAL,value:parseFloat(i),raw:i}}gobbleStringLiteral(){let t="";const r=this.index,i=this.expr.charAt(this.index++);let s=!1;for(;this.index<this.expr.length;){let e=this.expr.charAt(this.index++);if(e===i){s=!0;break}if("\\"===e)switch(e=this.expr.charAt(this.index++),e){case"n":t+="\n";break;case"r":t+="\r";break;case"t":t+="\t";break;case"b":t+="\b";break;case"f":t+="\f";break;case"v":t+="\v";break;default:t+=e}else t+=e}return s||this.throwError('Unclosed quote after "'+t+'"'),{type:e.LITERAL,value:t,raw:this.expr.substring(r,this.index)}}gobbleIdentifier(){let t=this.code,r=this.index;for(e.isIdentifierStart(t)?this.index++:this.throwError("Unexpected "+this.char);this.index<this.expr.length&&(t=this.code,e.isIdentifierPart(t));)this.index++;return{type:e.IDENTIFIER,name:this.expr.slice(r,this.index)}}gobbleArguments(t){const r=[];let i=!1,s=0;for(;this.index<this.expr.length;){this.gobbleSpaces();let n=this.code;if(n===t){i=!0,this.index++,t===e.CPAREN_CODE&&s&&s>=r.length&&this.throwError("Unexpected token "+String.fromCharCode(t));break}if(n===e.COMMA_CODE){if(this.index++,s++,s!==r.length)if(t===e.CPAREN_CODE)this.throwError("Unexpected token ,");else if(t===e.CBRACK_CODE)for(let e=r.length;e<s;e++)r.push(null)}else if(r.length!==s&&0!==s)this.throwError("Expected comma");else{const t=this.gobbleExpression();t&&t.type!==e.COMPOUND||this.throwError("Expected comma"),r.push(t)}}return i||this.throwError("Expected "+String.fromCharCode(t)),r}gobbleGroup(){this.index++;let t=this.gobbleExpressions(e.CPAREN_CODE);if(this.code===e.CPAREN_CODE)return this.index++,1===t.length?t[0]:!!t.length&&{type:e.SEQUENCE_EXP,expressions:t};this.throwError("Unclosed (")}gobbleArray(){return this.index++,{type:e.ARRAY_EXP,elements:this.gobbleArguments(e.CBRACK_CODE)}}}const t=new class{add(e,t,r){if("string"!=typeof arguments[0])for(let e in arguments[0])this.add(e,arguments[0][e],arguments[1]);else(Array.isArray(e)?e:[e]).forEach((function(e){this[e]=this[e]||[],t&&this[e][r?"unshift":"push"](t)}),this)}run(e,t){this[e]=this[e]||[],this[e].forEach((function(e){e.call(t&&t.context?t.context:t,t)}))}};Object.assign(e,{hooks:t,plugins:new class{constructor(e){this.jsep=e,this.registered={}}register(...e){e.forEach((e=>{if("object"!=typeof e||!e.name||!e.init)throw new Error("Invalid JSEP plugin format");this.registered[e.name]||(e.init(this.jsep),this.registered[e.name]=e)}))}}(e),COMPOUND:"Compound",SEQUENCE_EXP:"SequenceExpression",IDENTIFIER:"Identifier",MEMBER_EXP:"MemberExpression",LITERAL:"Literal",THIS_EXP:"ThisExpression",CALL_EXP:"CallExpression",UNARY_EXP:"UnaryExpression",BINARY_EXP:"BinaryExpression",ARRAY_EXP:"ArrayExpression",TAB_CODE:9,LF_CODE:10,CR_CODE:13,SPACE_CODE:32,PERIOD_CODE:46,COMMA_CODE:44,SQUOTE_CODE:39,DQUOTE_CODE:34,OPAREN_CODE:40,CPAREN_CODE:41,OBRACK_CODE:91,CBRACK_CODE:93,QUMARK_CODE:63,SEMCOL_CODE:59,COLON_CODE:58,unary_ops:{"-":1,"!":1,"~":1,"+":1},binary_ops:{"||":1,"??":1,"&&":2,"|":3,"^":4,"&":5,"==":6,"!=":6,"===":6,"!==":6,"<":7,">":7,"<=":7,">=":7,"<<":8,">>":8,">>>":8,"+":9,"-":9,"*":10,"/":10,"%":10,"**":11},right_associative:new Set(["**"]),additional_identifier_chars:new Set(["$","_"]),literals:{true:!0,false:!1,null:null},this_str:"this"}),e.max_unop_len=e.getMaxKeyLen(e.unary_ops),e.max_binop_len=e.getMaxKeyLen(e.binary_ops);const r=t=>new e(t).parse(),i=Object.getOwnPropertyNames(class{});Object.getOwnPropertyNames(e).filter((e=>!i.includes(e)&&void 0===r[e])).forEach((t=>{r[t]=e[t]})),r.Jsep=e;var s={name:"ternary",init(e){e.hooks.add("after-expression",(function(t){if(t.node&&this.code===e.QUMARK_CODE){this.index++;const r=t.node,i=this.gobbleExpression();if(i||this.throwError("Expected expression"),this.gobbleSpaces(),this.code===e.COLON_CODE){this.index++;const s=this.gobbleExpression();if(s||this.throwError("Expected expression"),t.node={type:"ConditionalExpression",test:r,consequent:i,alternate:s},r.operator&&e.binary_ops[r.operator]<=.9){let i=r;for(;i.right.operator&&e.binary_ops[i.right.operator]<=.9;)i=i.right;t.node.test=i.right,i.right=t.node,t.node=r}}else this.throwError("Expected :")}}))}};return r.plugins.register(s),r}();
+//# sourceMappingURL=jsep.iife.min.js.map
+
+
+// Definisce il piccolo linguaggio di espressioni sicuro usato da data-extra-valid:
+// una grammatica fissa (mai JavaScript/eval) parsata da jsep e percorsa da evalExprNode.
+// Pipeline: stessa sorgente usata server-side da sanitizeLlmOutput.js e iniettata client-side da formEngine.js, così le due non possono mai divergere.
+
+const ALLOWED_NODE_TYPES = new Set([
+  'BinaryExpression', 'LogicalExpression', 'UnaryExpression', 'Literal', 'Identifier', 'CallExpression',
+]);
+
+const ALLOWED_IDENTIFIERS = new Set(['value', 'now']);
+
+// name -> arity. All pure functions of their arguments only — no closures over the
+// page, DOM, clock or network (the one exception, "now", is injected as data by the
+// engine itself, never read by a function call).
+const ALLOWED_CALLS = {
+  min: 2, max: 2, abs: 1, round: 1, floor: 1, ceil: 1,
+  len: 1, includes: 2, startsWith: 2, endsWith: 2, lower: 1, upper: 1,
+  daysUntil: 1, daysSince: 1, // date-string argument -> whole days from/to `now`
+};
+
+// Walks a jsep AST node and throws on the first thing outside ALLOWED_*. Used
+// server-side to reject an LLM field before it's ever shipped to a browser.
+function assertSafeExprNode(node, exprForError) {
+  if (!ALLOWED_NODE_TYPES.has(node.type)) {
+    throw new Error(`Disallowed expression node "${node.type}" in data-extra-valid="${exprForError}"`);
+  }
+  if (node.type === 'Identifier' && !ALLOWED_IDENTIFIERS.has(node.name)) {
+    throw new Error(`Disallowed identifier "${node.name}" in data-extra-valid="${exprForError}"`);
+  }
+  if (node.type === 'CallExpression') {
+    const calleeName = node.callee && node.callee.type === 'Identifier' ? node.callee.name : null;
+    const arity = calleeName && ALLOWED_CALLS[calleeName];
+    if (!arity) {
+      throw new Error(`Disallowed function call "${calleeName || '?'}" in data-extra-valid="${exprForError}"`);
+    }
+    if (node.arguments.length !== arity) {
+      throw new Error(`"${calleeName}" expects ${arity} argument(s) in data-extra-valid="${exprForError}"`);
+    }
+    node.arguments.forEach(arg => assertSafeExprNode(arg, exprForError));
+    return;
+  }
+  for (const key of ['left', 'right', 'argument']) {
+    if (node[key]) assertSafeExprNode(node[key], exprForError);
+  }
+}
+
+// The interpreter's function table. Pure JS, no I/O — same list as ALLOWED_CALLS.
+const CALL_IMPLS = {
+  min: (a, b) => Math.min(a, b),
+  max: (a, b) => Math.max(a, b),
+  abs: (a) => Math.abs(a),
+  round: (a) => Math.round(a),
+  floor: (a) => Math.floor(a),
+  ceil: (a) => Math.ceil(a),
+  len: (a) => (a == null ? 0 : a.length),
+  includes: (a, b) => String(a).includes(b),
+  startsWith: (a, b) => String(a).startsWith(b),
+  endsWith: (a, b) => String(a).endsWith(b),
+  lower: (a) => String(a).toLowerCase(),
+  upper: (a) => String(a).toUpperCase(),
+  daysUntil: (a, scope) => Math.floor((Date.parse(a) - scope.now) / 86400000),
+  daysSince: (a, scope) => Math.floor((scope.now - Date.parse(a)) / 86400000),
+};
+
+// Evaluates a jsep AST node against `scope` ({ value, now }). Assumes the node has
+// already passed assertSafeExprNode — this never falls back to eval/Function, so an
+// unexpected node type simply throws rather than silently doing something unsafe.
+function evalExprNode(node, scope) {
+  switch (node.type) {
+    case 'Literal': return node.value;
+    case 'Identifier':
+      if (!(node.name in scope)) throw new Error(`Unknown identifier "${node.name}"`);
+      return scope[node.name];
+    case 'UnaryExpression': {
+      const arg = evalExprNode(node.argument, scope);
+      if (node.operator === '!') return !arg;
+      if (node.operator === '-') return -arg;
+      if (node.operator === '+') return +arg;
+      throw new Error(`Unsupported unary operator "${node.operator}"`);
+    }
+    case 'BinaryExpression': {
+      const l = evalExprNode(node.left, scope);
+      const r = evalExprNode(node.right, scope);
+      switch (node.operator) {
+        case '+': return l + r;
+        case '-': return l - r;
+        case '*': return l * r;
+        case '/': return l / r;
+        case '%': return l % r;
+        case '<': return l < r;
+        case '<=': return l <= r;
+        case '>': return l > r;
+        case '>=': return l >= r;
+        case '==': return l == r;
+        case '!=': return l != r;
+        case '===': return l === r;
+        case '!==': return l !== r;
+        default: throw new Error(`Unsupported binary operator "${node.operator}"`);
+      }
+    }
+    case 'LogicalExpression': {
+      if (node.operator === '&&') return evalExprNode(node.left, scope) && evalExprNode(node.right, scope);
+      if (node.operator === '||') return evalExprNode(node.left, scope) || evalExprNode(node.right, scope);
+      throw new Error(`Unsupported logical operator "${node.operator}"`);
+    }
+    case 'CallExpression': {
+      const name = node.callee.name;
+      if (!(name in CALL_IMPLS)) throw new Error(`Unknown function "${name}"`);
+      const args = node.arguments.map(a => evalExprNode(a, scope));
+      return CALL_IMPLS[name](...args, scope);
+    }
+    default:
+      throw new Error(`Unsupported expression node "${node.type}"`);
+  }
+}
+
+
+
+// ── Motore generico campi dichiarativi ──────────────────────────────────
+
+// Legge, valida e raccoglie qualunque campo non-geo scritto secondo il contratto
+// dichiarativo (vedi data/rules.txt): <div class="section">...<input name="NAME" ...
+// data-extra-valid="EXPR">...<span class="error-msg" id="NAMEErr">...</div>.
+// Pipeline: iniettato verbatim in ogni pagina generata da lib/render/formEngine.js; i campi geo vengono raccolti a parte dal proprio script.
+
+function readFieldValue(form, el) {
+  if (el.type === 'radio') {
+    // Radios sharing a name resolve as a RadioNodeList off form.elements -- reading
+    // .value there gives the checked one's value (or '' if none is checked), unlike
+    // el.value on a single radio which is always that radio's own static value.
+    return form.elements[el.name].value;
+  }
+  if (el.type === 'checkbox') return el.checked;
+  if (el.multiple) return Array.from(el.selectedOptions).map(o => o.value);
+  if (el.dataset.rawJson !== undefined) {
+    try { return JSON.parse(el.value); } catch (e) { return undefined; }
+  }
+  if (el.dataset.arrayItems) {
+    if (el.value.trim() === '') return [];
+    const parts = el.value.split(',').map(s => s.trim()).filter(s => s !== '');
+    return el.dataset.arrayItems === 'number' ? parts.map(Number) : parts;
+  }
+  if (el.type === 'number') {
+    const n = el.step === '1' ? parseInt(el.value, 10) : parseFloat(el.value);
+    return el.value === '' ? undefined : n;
+  }
+  return el.value.trim();
+}
+
+function isEmptyValue(v) {
+  return v === undefined || v === null || v === '' || (typeof v === 'number' && isNaN(v)) ||
+    (Array.isArray(v) && v.length === 0);
+}
+
+// Never eval/new Function: expr was already vetted server-side by
+// lib/llm/sanitizeLlmOutput.js against the exact same node/call whitelist (see
+// lib/render/exprLanguage.js), and here it's parsed by jsep and walked by
+// evalExprNode -- an expression can only do what that interpreter explicitly
+// implements.
+function evalExtraValid(expr, value) {
+  try {
+    const ast = jsep(expr);
+    assertSafeExprNode(ast, expr);
+    return evalExprNode(ast, { value, now: Date.now() });
+  } catch (e) {
+    return true; // an unreadable/unsafe expression never blocks submission
+  }
+}
+
+function setNestedPayload(payload, name, value) {
+  const dot = name.indexOf('.');
+  if (dot === -1) { payload[name] = value; return; }
+  const group = name.slice(0, dot);
+  const key = name.slice(dot + 1);
+  if (!payload[group] || typeof payload[group] !== 'object') payload[group] = {};
+  payload[group][key] = value;
+}
+
+// Runs the declarative engine over every plain [name] field in the form.
+// Returns `valid` and writes collected values into `payload` — geo fields are
+// collected separately by geoRenderer's own script, which merges into the same
+// payload object after this runs.
+function runFormEngine(form, payload) {
+  let valid = true;
+  const seen = new Set();
+  Array.from(form.elements).forEach(el => {
+    if (!el.name || seen.has(el.name) || el.dataset.geoField !== undefined || el.disabled) return;
+    seen.add(el.name);
+
+    const value = readFieldValue(form, el);
+    const required = el.required;
+    const empty = isEmptyValue(value);
+
+    let fieldValid = true;
+    if (required && empty) fieldValid = false;
+    if (!empty && !el.checkValidity()) fieldValid = false;
+    if (!empty && fieldValid && Array.isArray(value)) {
+      const min = el.dataset.minItems !== undefined ? Number(el.dataset.minItems) : undefined;
+      const max = el.dataset.maxItems !== undefined ? Number(el.dataset.maxItems) : undefined;
+      if ((min !== undefined && value.length < min) || (max !== undefined && value.length > max)) {
+        fieldValid = false;
+      }
+    }
+    if (!empty && fieldValid && el.dataset.extraValid) {
+      fieldValid = evalExtraValid(el.dataset.extraValid, value);
+    }
+
+    const errEl = document.getElementById(el.name + 'Err') ||
+      document.getElementById(el.id + 'Err');
+    if (errEl) errEl.style.display = fieldValid ? 'none' : 'block';
+    if (!fieldValid) valid = false;
+
+    if (!empty) setNestedPayload(payload, el.name, value);
+  });
+  return valid;
+}
+
+// Motore runtime per i campi geo (mappa Leaflet condivisa), con tre ruoli: union
+// (forme fuse via turf.union), contained (forme con una o più proprietà obbligatorie
+// in f.props[], validate contro un campo union precedente), single (esattamente una forma).
+// Pipeline: guidato dai descrittori per campo passati come dati all'init (vedi il fondo di questo file); il lato HTML è lib/render/geoRenderer.js.
+
+const MEASURE_COLORS = ['#805ad5', '#e53e3e', '#d69e2e', '#38a169', '#3182ce', '#dd6b20', '#d53f8c', '#718096'];
+
+// Circles are center+radius in Leaflet; approximate as a GeoJSON Polygon so union/
+// containment/payload all work uniformly for polygon, rectangle and circle.
+function layerToPolygonGeometry(layer) {
+  if (layer instanceof L.Circle) {
+    const center = layer.getLatLng();
+    return turf.circle([center.lng, center.lat], layer.getRadius() / 1000, { units: 'kilometers', steps: 64 }).geometry;
+  }
+  return layer.toGeoJSON().geometry;
+}
+
+class GeoFieldEngine {
+  // fields: descriptors from lib/render/geoRenderer.js's describeGeoField, as data.
+  constructor(map, fields) {
+    this.map = map;
+    this.fields = fields;
+    this.byName = new Map(fields.map(f => [f.name, f]));
+    this.state = new Map();
+    this.currentPhase = fields[0].name;
+    this.labelLayer = fields.some(f => f.multi) ? new L.FeatureGroup().addTo(map) : null;
+
+    fields.forEach(f => this.state.set(f.name, this._initialState(f)));
+    this.drawControls = new Map(fields.map(f => [f.name, this._buildDrawControl(f)]));
+
+    this.drawControls.get(fields[0].name).addTo(map);
+
+    map.on(L.Draw.Event.CREATED, (e) => this._onCreated(e));
+    map.on(L.Draw.Event.DELETED, (e) => this._onDeleted(e));
+  }
+
+  _initialState(f) {
+    const layer = new L.FeatureGroup().addTo(this.map);
+    if (f.union) {
+      return { layer, mergedLayer: new L.FeatureGroup().addTo(this.map), items: [], counter: 0, merged: null };
+    }
+    if (f.multi) {
+      return { layer, items: [], counter: 0 };
+    }
+    return { layer, geojson: null };
+  }
+
+  // f.drawTools is already fully resolved server-side (geoRenderer.js's
+  // resolveDrawTools): certain geometry types (Point/LineString) decide it outright,
+  // ambiguous ones fall back to the LLM's own choice or the permissive
+  // polygon/rectangle/circle default — this just turns that array into the flag
+  // object leaflet-draw expects, one tool enabled per entry, nothing more.
+  _buildDrawControl(f) {
+    const NONE = { polygon: false, rectangle: false, circle: false, polyline: false, marker: false, circlemarker: false };
+    const draw = f.bboxOnly ? { ...NONE, rectangle: true } : { ...NONE };
+    if (!f.bboxOnly) {
+      (f.drawTools || ['polygon', 'rectangle', 'circle']).forEach(tool => { draw[tool] = true; });
+    }
+    return new L.Control.Draw({
+      edit: { featureGroup: this.state.get(f.name).layer },
+      draw,
+    });
+  }
+
+  // ── Phase switching ──────────────────────────────────────────────────────
+  setPhase(fieldName) {
+    this.currentPhase = fieldName;
+    this.fields.forEach(f => {
+      const control = this.drawControls.get(f.name);
+      if (f.name !== fieldName) {
+        try { this.map.removeControl(control); } catch (e) { /* not currently added */ }
+      }
+    });
+    this.drawControls.get(fieldName).addTo(this.map);
+
+    const hint = document.getElementById('mapHint');
+    const phaseField = this.byName.get(fieldName);
+    if (hint) hint.textContent = 'Draw the ' + phaseField.title + ' ' + (phaseField.bboxOnly ? 'rectangle' : 'polygon') + (phaseField.multi ? '(s)' : '') + '.';
+
+    this.fields.forEach(f => {
+      const btn = document.getElementById('btn_' + f.varName);
+      if (btn) btn.classList.toggle('active', f.name === fieldName);
+      const section = document.getElementById('section_' + f.varName);
+      if (section) section.style.display = (f.name === fieldName) ? '' : 'none';
+      const doneBtn = document.getElementById('btnDone_' + f.varName);
+      if (doneBtn) doneBtn.style.display = (f.name === fieldName && doneBtn.dataset.hasItems === '1') ? '' : 'none';
+    });
+  }
+
+  advanceToNextPhase(fromFieldName) {
+    const idx = this.fields.findIndex(f => f.name === fromFieldName);
+    const next = this.fields[idx + 1];
+    if (!next) return;
+    const nextBtn = document.getElementById('btn_' + next.varName);
+    if (nextBtn) nextBtn.disabled = false;
+    this.setPhase(next.name);
+  }
+
+  // ── Union: merge + redraw outline ────────────────────────────────────────
+  recomputeMerged(fieldName) {
+    const s = this.state.get(fieldName);
+    s.mergedLayer.clearLayers();
+    if (s.items.length === 0) { s.merged = null; return; }
+    let acc = turf.polygon(s.items[0].geometry.coordinates);
+    for (let i = 1; i < s.items.length; i++) {
+      try {
+        acc = turf.union(acc, turf.polygon(s.items[i].geometry.coordinates));
+      } catch (err) { /* non-overlapping or invalid geometry: keep accumulated result */ }
+    }
+    s.merged = acc.geometry;
+    L.geoJSON(s.merged, {
+      style: { color: '#1a1a2e', weight: 3, dashArray: '6 4', fillColor: '#3a7bd5', fillOpacity: 0.12, interactive: false },
+    }).addTo(s.mergedLayer);
+  }
+
+  confirmDone(fieldName) {
+    const s = this.state.get(fieldName);
+    if (s.items.length === 0) return;
+    const btn = document.getElementById('btn_' + this.byName.get(fieldName).varName);
+    if (btn) { btn.classList.remove('active'); btn.classList.add('done'); }
+    const icon = document.getElementById('icon_' + this.byName.get(fieldName).varName);
+    if (icon) icon.textContent = '✓';
+    this.advanceToNextPhase(fieldName);
+  }
+
+  // ── Contained/multi: per-shape property list ─────────────────────────────
+  // f.props is always an array (0, 1, or more entries) — one <input> per entry,
+  // all on the same row, each writing into item.propValues[propKey].
+  renderFeatureList(fieldName) {
+    const f = this.byName.get(fieldName);
+    const s = this.state.get(fieldName);
+    const list = document.getElementById('list_' + f.varName);
+    if (!list) return;
+    const props = f.props || [];
+    list.innerHTML = '';
+    s.items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'feature-row';
+      const inputsHtml = props.map(p => '<input type="number" class="feature-prop-input" id="prop_' + f.varName + '_' + item.idx + '_' + p.propKey + '" placeholder="' + p.propKey + (p.inferred ? ' (inferred)' : '') + '" value="' + (item.propValues[p.propKey] ?? '') + '">').join('');
+      row.innerHTML = '<div class="feature-swatch" style="background:' + item.color + '"></div>' +
+        '<span class="feature-label">' + f.title + ' #' + item.idx + '</span>' +
+        inputsHtml +
+        '<button type="button" class="btn-remove-feature" data-remove-feature="' + f.name + '" data-remove-idx="' + item.idx + '">×</button>';
+      list.appendChild(row);
+      props.forEach(p => {
+        row.querySelector('#prop_' + f.varName + '_' + item.idx + '_' + p.propKey).addEventListener('input', (ev) => {
+          const entry = s.items.find(x => x.idx === item.idx);
+          if (entry) entry.propValues[p.propKey] = p.propType === 'integer' ? parseInt(ev.target.value, 10) : parseFloat(ev.target.value);
+        });
+      });
+    });
+    const section = document.getElementById('section_' + f.varName);
+    if (section) section.style.display = s.items.length ? '' : (this.currentPhase === fieldName ? '' : 'none');
+  }
+
+  removeFeature(fieldName, idx) {
+    const s = this.state.get(fieldName);
+    const item = s.items.find(x => x.idx === idx);
+    if (!item) return;
+    s.layer.removeLayer(item.layer);
+    if (item.marker) this.labelLayer.removeLayer(item.marker);
+    s.items = s.items.filter(x => x.idx !== idx);
+    this.renderFeatureList(fieldName);
+  }
+
+  // ── Draw / delete events ──────────────────────────────────────────────────
+  _onCreated(e) {
+    const fieldName = this.currentPhase;
+    const f = this.byName.get(fieldName);
+    const s = this.state.get(fieldName);
+
+    if (f.union) {
+      s.counter++;
+      const idx = s.counter;
+      if (e.layer.setStyle) e.layer.setStyle({ stroke: false, fill: false });
+      s.layer.addLayer(e.layer);
+      s.items.push({ idx, layer: e.layer, geometry: layerToPolygonGeometry(e.layer) });
+      this.recomputeMerged(fieldName);
+
+      const isLastPhase = this.fields.indexOf(f) === this.fields.length - 1;
+      if (!isLastPhase) {
+        const doneBtn = document.getElementById('btnDone_' + f.varName);
+        if (doneBtn) { doneBtn.style.display = ''; doneBtn.dataset.hasItems = '1'; }
+      }
+      return;
+    }
+
+    if (f.multi) {
+      const drawnGeom = layerToPolygonGeometry(e.layer);
+      if (f.containerVarName) {
+        const containerField = this.fields.find(x => x.varName === f.containerVarName);
+        const containerState = containerField && this.state.get(containerField.name);
+        const containErrEl = document.getElementById('containErr_' + f.varName);
+        if (containerState && containerState.merged &&
+          !turf.booleanContains(turf.feature(containerState.merged), turf.feature(drawnGeom))) {
+          s.layer.removeLayer(e.layer);
+          if (containErrEl) containErrEl.style.display = 'block';
+          return;
+        }
+        if (containErrEl) containErrEl.style.display = 'none';
+      }
+      s.counter++;
+      const idx = s.counter;
+      const color = MEASURE_COLORS[(idx - 1) % MEASURE_COLORS.length];
+      if (e.layer.setStyle) e.layer.setStyle({ color, fillOpacity: 0.25 });
+      s.layer.addLayer(e.layer);
+      // L.Marker has no getBounds() (it's a point, not an area) — use its own
+      // position directly instead of the center of a bounding box.
+      const center = e.layer.getBounds ? e.layer.getBounds().getCenter() : e.layer.getLatLng();
+      const icon = L.divIcon({
+        html: '<div style="background:' + color + ';color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.3)">' + idx + '</div>',
+        className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+      });
+      const marker = L.marker(center, { icon, interactive: false }).addTo(this.labelLayer);
+      s.items.push({ idx, layer: e.layer, marker, color, geometry: drawnGeom, propValues: {} });
+      this.renderFeatureList(fieldName);
+      return;
+    }
+
+    // single: exactly one shape, replaces any previous one
+    s.layer.clearLayers();
+    s.layer.addLayer(e.layer);
+    s.geojson = layerToPolygonGeometry(e.layer);
+    if (this.fields.length > 1) {
+      const btn = document.getElementById('btn_' + f.varName);
+      if (btn) { btn.classList.remove('active'); btn.classList.add('done'); }
+      const icon = document.getElementById('icon_' + f.varName);
+      if (icon) icon.textContent = '✓';
+      this.advanceToNextPhase(fieldName);
+    }
+  }
+
+  _onDeleted(e) {
+    const fieldName = this.currentPhase;
+    const f = this.byName.get(fieldName);
+    const s = this.state.get(fieldName);
+
+    if (f.union) {
+      const deletedIdx = new Set();
+      e.layers.eachLayer(l => {
+        const m = s.items.find(item => item.layer === l);
+        if (m) deletedIdx.add(m.idx);
+      });
+      s.items = s.items.filter(item => !deletedIdx.has(item.idx));
+      this.recomputeMerged(fieldName);
+      if (s.items.length === 0) {
+        const doneBtn = document.getElementById('btnDone_' + f.varName);
+        if (doneBtn) { doneBtn.style.display = 'none'; doneBtn.dataset.hasItems = ''; }
+        if (this.fields.length > 1) {
+          const btn = document.getElementById('btn_' + f.varName);
+          if (btn) btn.classList.remove('done');
+        }
+      }
+      return;
+    }
+
+    if (f.multi) {
+      const deletedIdx = new Set();
+      e.layers.eachLayer(l => {
+        const m = s.items.find(item => item.layer === l);
+        if (m) { deletedIdx.add(m.idx); this.labelLayer.removeLayer(m.marker); }
+      });
+      s.items = s.items.filter(item => !deletedIdx.has(item.idx));
+      this.renderFeatureList(fieldName);
+      return;
+    }
+
+    s.geojson = null;
+    if (this.fields.length > 1) {
+      const btn = document.getElementById('btn_' + f.varName);
+      if (btn) btn.classList.remove('done');
+    }
+  }
+
+  // ── Validation / payload collection ──────────────────────────────────────
+  validate() {
+    let valid = true;
+    this.fields.forEach(f => {
+      const s = this.state.get(f.name);
+      const errEl = document.getElementById('err_' + f.varName);
+      const hasShape = f.union ? !!s.merged : f.multi ? s.items.length > 0 : !!s.geojson;
+      if (errEl) errEl.style.display = hasShape ? 'none' : 'block';
+      if (!hasShape) valid = false;
+
+      if (f.multi && f.props && f.props.length > 0) {
+        const missing = s.items.some(item =>
+          f.props.some(p => item.propValues[p.propKey] == null || isNaN(item.propValues[p.propKey])));
+        const propErrEl = document.getElementById('propErr_' + f.varName);
+        if (propErrEl) propErrEl.style.display = missing ? 'block' : 'none';
+        if (missing) valid = false;
+      }
+
+      if (f.bbox3D) {
+        const minZEl = document.getElementById(f.varName + '_minZ');
+        const maxZEl = document.getElementById(f.varName + '_maxZ');
+        if (minZEl.value === '' || maxZEl.value === '') valid = false;
+      }
+    });
+    return valid;
+  }
+
+  collectValue(fieldName) {
+    const f = this.byName.get(fieldName);
+    const s = this.state.get(fieldName);
+
+    if (f.union) {
+      if (f.kind === 'geo-polygon') return s.merged;
+      if (f.kind === 'geo-feature') return { type: 'Feature', geometry: s.merged, properties: {} };
+      if (f.kind === 'geo-featurecollection') {
+        return { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: s.merged, properties: {} }] };
+      }
+      return null;
+    }
+    if (f.kind === 'geo-bbox') {
+      if (!s.geojson) return null;
+      const [minX, minY, maxX, maxY] = turf.bbox(turf.feature(s.geojson));
+      if (!f.bbox3D) return [minX, minY, maxX, maxY];
+      // 3D variant: the map still only draws the 2D rectangle; minZ/maxZ come from
+      // their own plain number inputs (rendered alongside the map, see geoRenderer.js)
+      // and get composed into the final 6-element array here.
+      const minZ = parseFloat(document.getElementById(f.varName + '_minZ').value);
+      const maxZ = parseFloat(document.getElementById(f.varName + '_maxZ').value);
+      return [minX, minY, isNaN(minZ) ? null : minZ, maxX, maxY, isNaN(maxZ) ? null : maxZ];
+    }
+    if (f.kind === 'geo-polygon') return s.geojson;
+    if (f.kind === 'geo-feature') return { type: 'Feature', geometry: s.geojson, properties: {} };
+    if (f.kind === 'geo-featurecollection') {
+      return { type: 'FeatureCollection', features: s.items.map(item => ({ type: 'Feature', geometry: item.geometry, properties: {} })) };
+    }
+    if (f.kind === 'geo-featurecollection-props') {
+      return {
+        type: 'FeatureCollection',
+        features: s.items.map(item => ({ type: 'Feature', geometry: item.geometry, properties: { ...item.propValues } })),
+      };
+    }
+    if (f.kind === 'geo-feature-array') {
+      return s.items.map(item => ({ type: 'Feature', geometry: item.geometry, properties: { ...item.propValues } }));
+    }
+    return null;
+  }
+}
+
+// Initial center from ?lat=&lng=&zoom= (also overridable via postMessage set-center).
+function readCenterFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const lat = parseFloat(params.get('lat'));
+  const lng = parseFloat(params.get('lng'));
+  const zoom = parseFloat(params.get('zoom'));
+  if (isNaN(lat) || isNaN(lng)) return null;
+  return { lat, lng, zoom: isNaN(zoom) ? 13 : zoom };
+}
+
+// Builds the map + engine, wires phase-bar/done/remove-feature buttons via data-
+// attributes, and exposes window.__geoEngine for the submit handler.
+function initGeoFields(fields) {
+  const DEFAULT_CENTER = [50.88, 4.70];
+  const DEFAULT_ZOOM = 13;
+
+  const initialCenter = readCenterFromQuery();
+  const map = L.map('map').setView(
+    initialCenter ? [initialCenter.lat, initialCenter.lng] : DEFAULT_CENTER,
+    initialCenter ? initialCenter.zoom : DEFAULT_ZOOM
+  );
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+  }).addTo(map);
+
+  window.addEventListener('message', function (ev) {
+    const msg = ev.data;
+    if (!msg || msg.type !== 'set-center') return;
+    const lat = parseFloat(msg.lat);
+    const lng = parseFloat(msg.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    map.setView([lat, lng], isNaN(parseFloat(msg.zoom)) ? map.getZoom() : parseFloat(msg.zoom));
+  });
+
+  const engine = new GeoFieldEngine(map, fields);
+  window.__geoEngine = engine;
+
+  document.querySelectorAll('[data-phase-switch]').forEach(btn => {
+    btn.addEventListener('click', () => engine.setPhase(btn.dataset.phaseSwitch));
+  });
+  document.querySelectorAll('[data-phase-done]').forEach(btn => {
+    btn.addEventListener('click', () => engine.confirmDone(btn.dataset.phaseDone));
+  });
+  // Delegated: renderFeatureList() only replaces innerHTML, not the container.
+  document.querySelectorAll('.feature-list').forEach(list => {
+    list.addEventListener('click', (ev) => {
+      const removeBtn = ev.target.closest('[data-remove-feature]');
+      if (!removeBtn) return;
+      engine.removeFeature(removeBtn.dataset.removeFeature, Number(removeBtn.dataset.removeIdx));
+    });
+  });
+
+  window.parent.postMessage({ type: 'analysis-ready' }, '*');
+}
+
+// NOTE: no initGeoFields(...) call at the bottom of this file — unlike the rest of
+// this engine, that call needs this specific page's own field descriptors, which only
+// exist in Node at generation time. lib/render/geoFieldEngine.js appends
+// `initGeoFields(${JSON.stringify(fields)})` itself, after reading this file's text.
+
+
+initGeoFields([{"name":"study_area","varName":"study_area","title":"Study Area","kind":"geo-feature","union":true,"multi":true,"containerVarName":null,"bboxOnly":false,"bbox3D":false,"drawTools":["polygon","rectangle","circle"]}]);
+
+document.getElementById('analysisForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const form = this;
+  const payload = {};
+
+  let valid = runFormEngine(form, payload);
+
+  if (window.__geoEngine && !window.__geoEngine.validate()) valid = false;
+  payload['study_area'] = window.__geoEngine.collectValue("study_area");
+
+  if (!valid) return;
+
+  window.parent.postMessage({
+    type: 'analysis-submit',
+    analysisId: '6a267ba527f6d6566629ce1e',
+    data: payload
+  }, '*');
+});
+
+function cancel() {
+  window.parent.postMessage({ type: 'analysis-cancel' }, '*');
+}
+</script>
+</body>
+</html>

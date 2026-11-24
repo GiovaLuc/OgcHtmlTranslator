@@ -1,0 +1,358 @@
+[
+  {
+    "id": "water-infiltration (This ID will be automatically overwritten by Kitsune)",
+    "title": "Water Infiltration Analysis Preset",
+    "ok": true,
+    "log": [
+      {
+        "field": "mode",
+        "source": "static",
+        "kind": "const",
+        "durationMs": 0
+      },
+      {
+        "field": "city",
+        "source": "static",
+        "kind": "enum-radio",
+        "durationMs": 0
+      },
+      {
+        "field": "geojson",
+        "source": "static",
+        "kind": "geo-feature",
+        "durationMs": 0
+      },
+      {
+        "field": "weather",
+        "source": "static",
+        "kind": "enum-radio",
+        "durationMs": 0
+      },
+      {
+        "field": "nbs_weights",
+        "source": "static",
+        "kind": "object-sum",
+        "durationMs": 1
+      }
+    ]
+  },
+  {
+    "id": "69e8ead9405d4d45dd0c946f",
+    "title": "Water Infiltration Analysis Custom",
+    "ok": true,
+    "log": [
+      {
+        "field": "mode",
+        "source": "static",
+        "kind": "const",
+        "durationMs": 0
+      },
+      {
+        "field": "city",
+        "source": "static",
+        "kind": "enum-radio",
+        "durationMs": 0
+      },
+      {
+        "field": "geojson",
+        "source": "static",
+        "kind": "geo-feature",
+        "durationMs": 0
+      },
+      {
+        "field": "weather",
+        "source": "static",
+        "kind": "object-numbers",
+        "durationMs": 1
+      },
+      {
+        "field": "nbs_weights",
+        "source": "static",
+        "kind": "object-sum",
+        "durationMs": 0
+      }
+    ]
+  },
+  {
+    "id": "air-filtration",
+    "title": "Air Filtration Analysis",
+    "ok": true,
+    "log": [
+      {
+        "field": "name",
+        "source": "static",
+        "kind": "string",
+        "durationMs": 0
+      },
+      {
+        "field": "geojson",
+        "source": "static",
+        "kind": "geo-feature",
+        "durationMs": 0
+      },
+      {
+        "field": "measures",
+        "source": "static",
+        "kind": "geo-feature-array",
+        "durationMs": 0
+      }
+    ]
+  },
+  {
+    "id": "energy-label-analysis",
+    "title": "Energy Label Analysis",
+    "ok": true,
+    "log": [
+      {
+        "field": "co2_emissions",
+        "source": "static",
+        "kind": "number",
+        "durationMs": 0
+      },
+      {
+        "field": "energy_consumption",
+        "source": "static",
+        "kind": "number",
+        "durationMs": 0
+      },
+      {
+        "field": "geojson",
+        "source": "static",
+        "kind": "geo-feature",
+        "durationMs": 0
+      }
+    ]
+  },
+  {
+    "id": "urban-forestry-3-30-300-analysis",
+    "title": "Urban Forestry 3-30-300 Analysis",
+    "ok": true,
+    "log": [
+      {
+        "field": "city",
+        "source": "static",
+        "kind": "string",
+        "durationMs": 0
+      },
+      {
+        "field": "geojson",
+        "source": "static",
+        "kind": "geo-featurecollection",
+        "durationMs": 0
+      },
+      {
+        "field": "canopy_input",
+        "source": "static",
+        "kind": "geo-featurecollection",
+        "durationMs": 0
+      },
+      {
+        "field": "height_column",
+        "source": "static",
+        "kind": "string",
+        "durationMs": 0
+      },
+      {
+        "field": "default_height",
+        "source": "static",
+        "kind": "number",
+        "durationMs": 0
+      }
+    ]
+  },
+  {
+    "id": "15minutescity",
+    "title": "15-Minutes City Analysis",
+    "ok": true,
+    "log": [
+      {
+        "field": "bbox",
+        "source": "static",
+        "kind": "geo-bbox",
+        "durationMs": 0
+      },
+      {
+        "field": "output_options",
+        "source": "fallback",
+        "error": "Ollama disabled for this field in this test run (only \"(none requested)\" is allowed to call it for real)",
+        "durationMs": 3
+      },
+      {
+        "field": "poi_category_osm",
+        "source": "static",
+        "kind": "array",
+        "durationMs": 0
+      }
+    ]
+  },
+  {
+    "id": "test-point-raw-geometry",
+    "title": "Test: Point geometry grezzo",
+    "ok": true,
+    "log": [
+      {
+        "field": "sensor_location",
+        "source": "static",
+        "kind": "geo-polygon",
+        "durationMs": 0
+      }
+    ]
+  },
+  {
+    "id": "test-linestring-raw-geometry",
+    "title": "Test: LineString geometry grezzo",
+    "ok": true,
+    "log": [
+      {
+        "field": "route",
+        "source": "static",
+        "kind": "geo-polygon",
+        "durationMs": 0
+      }
+    ]
+  },
+  {
+    "id": "test-explicit-geojson-format",
+    "title": "Test: format geojson-geometry esplicito",
+    "ok": true,
+    "log": [
+      {
+        "field": "area",
+        "source": "static",
+        "kind": "geo-polygon",
+        "durationMs": 0
+      }
+    ]
+  },
+  {
+    "id": "test-bbox-2d",
+    "title": "Test: Bounding Box 2D",
+    "ok": true,
+    "log": [
+      {
+        "field": "bbox",
+        "source": "static",
+        "kind": "geo-bbox",
+        "durationMs": 0
+      }
+    ]
+  },
+  {
+    "id": "test-bbox-3d",
+    "title": "Test: Bounding Box 3D",
+    "ok": true,
+    "log": [
+      {
+        "field": "extent",
+        "source": "static",
+        "kind": "geo-bbox",
+        "durationMs": 0
+      }
+    ]
+  },
+  {
+    "id": "test-mixed-scalar-geo",
+    "title": "Test: campi misti scalari + geo",
+    "ok": true,
+    "log": [
+      {
+        "field": "city",
+        "source": "static",
+        "kind": "enum-radio",
+        "durationMs": 0
+      },
+      {
+        "field": "threshold",
+        "source": "static",
+        "kind": "number",
+        "durationMs": 0
+      },
+      {
+        "field": "include_buffer",
+        "source": "static",
+        "kind": "boolean",
+        "durationMs": 0
+      },
+      {
+        "field": "notes",
+        "source": "static",
+        "kind": "string",
+        "durationMs": 0
+      },
+      {
+        "field": "study_area",
+        "source": "static",
+        "kind": "geo-feature",
+        "durationMs": 1
+      }
+    ]
+  },
+  {
+    "id": "test-geo-unknown-multipolygon",
+    "title": "Test: MultiPolygon via LLM (geo-unknown)",
+    "ok": true,
+    "log": [
+      {
+        "field": "affected_zones",
+        "source": "llm-geo",
+        "model": "starcoder2:instruct",
+        "kind": "geo-polygon",
+        "durationMs": 38211
+      }
+    ]
+  },
+  {
+    "id": "test-geo-unknown-multiprop",
+    "title": "Test: multi-property via LLM (geo-unknown, contained)",
+    "ok": true,
+    "log": [
+      {
+        "field": "risk_zones",
+        "source": "static",
+        "kind": "geo-featurecollection-props",
+        "durationMs": 0
+      }
+    ]
+  },
+  {
+    "id": "test-geo-unknown-inferred-prop",
+    "title": "Test: property inferita dalla description via LLM (geo-unknown)",
+    "ok": true,
+    "log": [
+      {
+        "field": "canopy_input",
+        "source": "llm-geo",
+        "model": "starcoder2:instruct",
+        "kind": "geo-featurecollection-props",
+        "durationMs": 683375
+      }
+    ]
+  },
+  {
+    "id": "test-geo-unknown-unrecognized",
+    "title": "Test: forma genuinamente nuova via LLM (geo-unknown, unrecognized)",
+    "ok": true,
+    "log": [
+      {
+        "field": "exotic_shape",
+        "source": "llm-geo-nested",
+        "model": "starcoder2:instruct",
+        "durationMs": 475090
+      }
+    ]
+  },
+  {
+    "id": "test-geo-unknown-drawtools",
+    "title": "Test: scelta drawTools via LLM (GeometryCollection misto)",
+    "ok": true,
+    "log": [
+      {
+        "field": "access_points_and_routes",
+        "source": "llm-geo",
+        "model": "starcoder2:instruct",
+        "kind": "geo-polygon",
+        "durationMs": 631997
+      }
+    ]
+  }
+]

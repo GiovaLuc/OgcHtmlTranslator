@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+.env
+.env.*
+.git
+.gitignore
+*.log
+out/
+out_real/
+out_suite/
+_test_*.js
+_test_*.log
+_serve_*.js
+_raw_*.txt
+Dockerfile
+docker-compose.yml
+.dockerignore

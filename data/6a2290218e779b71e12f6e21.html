@@ -265,6 +265,14 @@
     
     <input type="text" name="city" required>
   </div>
+  
+<div class="section">
+  <div class="section-title">Survey Date</div>
+  <p class="hint">Date the field survey was carried out. Must not be in the future.</p>
+  <input type="date" name="survey_date" id="survey_date" required data-extra-valid="value <= new Date().toISOString().split('T')[0]">
+  <span class="error-msg" id="survey_dateErr">Invalid value.</span>
+</div>
+
   <div class="actions">
     <button type="button" class="btn-cancel" onclick="cancel()">Cancel</button>
     <button type="submit" class="btn-submit">Run Analysis</button>
@@ -487,6 +495,50 @@
   }
 
 
+// Iterates every plain form control (input/select/textarea with a `name`) and marks its
+// section-title as required (.req) or optional (.optional-badge), matching whichever the
+// field's own `required` attribute says — never both, never neither.
+function markRequiredFields(form) {
+  form.querySelectorAll('input[name], select[name], textarea[name]').forEach(function(field) {
+    const section = field.closest('.section');
+    const title = section && section.querySelector('.section-title');
+    if (!title || title.querySelector('.req, .optional-badge')) return;
+    const badge = document.createElement('span');
+    if (field.required) {
+      badge.className = 'req';
+      badge.textContent = '*';
+    } else {
+      badge.className = 'optional-badge';
+      badge.textContent = 'Optional';
+    }
+    title.appendChild(badge);
+  });
+}
+markRequiredFields(document.getElementById('analysisForm'));
+
+// Validates every plain form control (input/select/textarea with a `name`) using its native
+// HTML5 constraints (required, type, min/max, pattern...) plus its data-extra-valid expression,
+// if present. Fields with custom logic (map-drawn geometries) have no plain `name` control here,
+// so they're naturally skipped and stay handled by their own dedicated validation below.
+function validateDynamicFields(form) {
+  let valid = true;
+  const values = {};
+  form.querySelectorAll('input[name], select[name], textarea[name]').forEach(function(field) {
+    const name = field.name;
+    const value = field.value;
+    let fieldValid = field.checkValidity();
+    if (fieldValid && field.dataset.extraValid) {
+      try { fieldValid = !!Function('value', 'return (' + field.dataset.extraValid + ')')(value); }
+      catch (err) { fieldValid = false; }
+    }
+    const errEl = document.getElementById(name + 'Err');
+    if (errEl) errEl.style.display = fieldValid ? 'none' : 'block';
+    if (!fieldValid) valid = false;
+    values[name] = value;
+  });
+  return { valid, values };
+}
+
 document.getElementById('analysisForm').addEventListener('submit', function(e) {
   e.preventDefault();
   const form = this;
@@ -504,12 +556,17 @@ document.getElementById('analysisForm').addEventListener('submit', function(e) {
     if (propMissing_canopy_input) { propErrEl_canopy_input.style.display = 'block'; valid = false; }
     else propErrEl_canopy_input.style.display = 'none';
 
+  const dynamicResult = validateDynamicFields(form);
+  if (!dynamicResult.valid) valid = false;
+
   if (!valid) return;
 
-  const payload = {};
+  const payload = Object.assign({}, dynamicResult.values);
     payload['city'] = form.elements['city'].value.trim();
     payload['bounding_box'] = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: merged_bounding_box, properties: {} }] };
     payload['canopy_input'] = { type: 'FeatureCollection', features: items_canopy_input.map(m => ({ type: 'Feature', geometry: m.geometry, properties: { height: m.propValue } })) };
+
+  console.log('Payload valido:', payload);
 
   window.parent.postMessage({
     type: 'analysis-submit',

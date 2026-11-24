@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Processi generati</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; display: flex; height: 100vh; }
+  nav { width: 260px; flex-shrink: 0; background: #1a1a2e; color: #fff; overflow-y: auto; }
+  nav a { display: block; padding: 12px 16px; color: #cbd5e0; text-decoration: none; border-bottom: 1px solid #2d3748; font-size: 13px; }
+  nav a:hover, nav a.active { background: #3a7bd5; color: #fff; }
+  main { flex: 1; display: flex; flex-direction: column; }
+  iframe { flex: 1; border: none; width: 100%; }
+</style>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+  <iframe id="frame"></iframe>
+</main>
+<script>
+  const pages = [
+    { file: '69f36bd417578b6da9c762a8.html', title: 'Water Infiltration — Custom' },
+    { file: '69f9f8d97a800207b21b71b4.html', title: 'Water Infiltration — Preset' },
+    { file: '6a05d4da59dd8038248af221.html', title: 'Air Filtration Analysis' },
+    { file: '6a2290218e779b71e12f6e21.html', title: '3-30-300 Analysis' },
+    { file: '6a267ba527f6d6566629ce1e.html', title: 'Energy Label Analysis' },
+    { file: '6a708b1e4a7a114585bb7862.html', title: '15-Minutes City Analysis' },
+  ];
+  const nav = document.getElementById('nav');
+  const frame = document.getElementById('frame');
+
+  function load(file, link) {
+    frame.src = file;
+    document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+    if (link) link.classList.add('active');
+  }
+
+  pages.forEach((p, i) => {
+    const a = document.createElement('a');
+    a.href = '#';
+    a.textContent = p.title;
+    a.onclick = (e) => { e.preventDefault(); load(p.file, a); };
+    nav.appendChild(a);
+    if (i === 0) load(p.file, a);
+  });
+</script>
+</body>
+</html>
